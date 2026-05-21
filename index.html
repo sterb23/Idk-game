@@ -3,57 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Budget Commando: Polygon Outbreak</title>
+    <title>Retro 2.5D Doom Clone</title>
     <style>
         body, html {
             margin: 0; padding: 0; overflow: hidden;
-            background-color: #050505; font-family: 'Courier New', Courier, monospace;
-            touch-action: none; user-select: none; color: #00ff00;
+            background-color: #000; font-family: 'Courier New', Courier, monospace;
+            touch-action: none; user-select: none;
         }
-        canvas { display: block; }
+        /* The Magic Retro Filter Trick */
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+        }
         
-        /* UI Layer */
+        /* HUD Interface */
         #ui-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
         }
-        #hud {
-            padding: 20px; display: flex; justify-content: space-between; align-items: center;
-            pointer-events: auto; background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 100%);
+        #doom-hud {
+            background: #222; border-top: 4px solid #444; height: 60px;
+            display: flex; justify-content: center; align-items: center; gap: 40px;
+            color: #ff3333; font-size: 20px; font-weight: bold; pointer-events: auto;
+            box-shadow: inset 0 5px 10px rgba(0,0,0,0.8);
         }
-        #stats { font-size: 24px; font-weight: bold; text-shadow: 0 0 5px #00ff00; }
-        
-        select, .btn {
-            background: #000; color: #00ff00; border: 2px solid #00ff00;
-            padding: 8px 12px; font-family: inherit; font-size: 14px; cursor: pointer;
-        }
-        .btn:active { background: #00ff00; color: #000; }
+        .hud-stat { text-align: center; background: #111; padding: 5px 15px; border: 2px solid #555; }
+        .hud-stat span { color: #fff; display: block; font-size: 16px; }
 
-        /* Mobile Layout */
+        /* Crosshair */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: rgba(255,0,0,0.5); font-size: 24px; pointer-events: none;
+        }
+
+        /* Virtual Mobile Overlay */
         #mobile-controls {
             display: flex; justify-content: space-between; align-items: flex-end;
-            padding: 30px; pointer-events: auto; gap: 20px;
+            padding: 20px; pointer-events: auto; margin-bottom: 10px;
         }
-        .move-btns { display: flex; gap: 15px; }
-        .touch-btn {
-            width: 70px; height: 70px; font-size: 24px; font-weight: bold;
-            display: flex; align-items: center; justify-content: center; border-radius: 10px;
+        .control-pad { display: grid; grid-template-columns: repeat(3, 60px); gap: 5px; }
+        .btn {
+            background: rgba(40,40,40,0.8); color: #fff; border: 2px solid #666;
+            height: 60px; display: flex; align-items: center; justify-content: center;
+            font-size: 20px; font-weight: bold; border-radius: 5px; cursor: pointer;
         }
+        .btn:active { background: #ff3333; color: #000; }
         #fire-btn {
-            width: 100px; height: 100px; background: #ff0055; color: #fff; border-color: #ff0055;
-            font-size: 20px; border-radius: 50%; text-shadow: 0 0 5px #fff;
+            width: 90px; height: 90px; background: #cc0000; border-radius: 50%;
+            border-color: #ff3333; font-size: 18px; text-shadow: 0 2px 2px #000;
         }
-        #fire-btn:active { background: #fff; color: #ff0055; }
 
-        /* Game Screens */
+        /* Screens */
         .screen {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9); border: 3px solid #00ff00; padding: 40px;
-            text-align: center; pointer-events: auto; z-index: 100; box-shadow: 0 0 20px #00ff00;
+            background: #111; border: 4px solid #ff3333; padding: 30px;
+            text-align: center; pointer-events: auto; color: #ff3333; box-shadow: 0 0 20px #000;
         }
-        .screen h1 { margin-top: 0; font-size: 32px; letter-spacing: 2px; }
+        .screen h1 { margin: 0 0 20px 0; font-size: 36px; }
         .screen button {
-            margin-top: 20px; padding: 12px 24px; font-size: 18px; font-weight: bold;
+            background: #ff3333; color: #000; border: none; padding: 10px 20px;
+            font-family: inherit; font-size: 18px; font-weight: bold; cursor: pointer;
         }
     </style>
 </head>
@@ -61,260 +73,274 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
+    <div id="crosshair">+</div>
+
     <div id="ui-container">
-        <div id="hud">
-            <div id="stats">SCORE: 0000 | AMMO: 30</div>
-            <select id="quality" onchange="changeQuality(this.value)">
-                <option value="high">Graphics: Fancy Potato</option>
-                <option value="low">Graphics: Literal Potato</option>
-            </select>
+        <div></div> <div id="mobile-controls">
+            <div class="control-pad">
+                <div></div><div class="btn" id="btn-w">▲</div><div></div>
+                <div class="btn" id="btn-a">◀</div><div class="btn" id="btn-s">▼</div><div class="btn" id="btn-d">▶</div>
+            </div>
+            <div class="btn" id="fire-btn">FIRE</div>
         </div>
 
-        <div id="mobile-controls">
-            <div class="move-btns">
-                <div class="btn touch-btn" id="left-btn">◀</div>
-                <div class="btn touch-btn" id="right-btn">▶</div>
-            </div>
-            <div class="btn touch-btn" id="fire-btn">FIRE</div>
+        <div id="doom-hud">
+            <div class="hud-stat"><span>AMMO</span><div id="hud-ammo">50</div></div>
+            <div class="hud-stat" style="color: #00ff00;"><span>HEALTH</span><div id="hud-health">100%</div></div>
+            <div class="hud-stat"><span>ARMOR</span><div>0%</div></div>
+            <div class="hud-stat" style="color: #ffff00;"><span>FRAGS</span><div id="hud-score">0</div></div>
         </div>
     </div>
 
     <div id="start-screen" class="screen">
-        <h1>BUDGET COMMANDO</h1>
-        <p>Defend the low-poly grid from invading shapes.</p>
-        <button class="btn" onclick="startGame()">START GAME</button>
+        <h1>DOOM: PORTABLE</h1>
+        <p style="color:#aaa;">PURGE THE PIXELATED UNDEAD</p>
+        <button onclick="startGame()">ENGAGE</button>
     </div>
 
-    <div id="game-over" class="screen" style="display: none;">
-        <h1 style="color: #ff0055; text-shadow: 0 0 5px #ff0055;">MISSION FAILED</h1>
-        <h3 id="final-score">SCORE: 0</h3>
-        <button class="btn" onclick="resetGame()">RETRY</button>
+    <div id="game-over-screen" class="screen" style="display:none;">
+        <h1>YOU DIED</h1>
+        <button onclick="restartGame()">RESPAWN</button>
     </div>
 
     <script>
-        // --- Low-Budget Synthetic Sound Generator (Web Audio API) ---
-        let audioCtx = null;
-        function initAudio() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-
-        function playSound(type) {
-            if (!audioCtx) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-
-            if (type === 'pew') { // Laser Sound
-                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
-            } else if (type === 'boom') { // Explosion
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(120, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(10, audioCtx.currentTime + 0.3);
-                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
-            } else if (type === 'click') { // Empty Gun Click
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+        // --- Retro Procedural Textures Generators ---
+        function generateBrickTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#5a1a1a'; ctx.fillRect(0,0,64,64); // Base red brick
+            ctx.fillStyle = '#331111'; // Mortar lines
+            for(let y=0; y<64; y+=16) {
+                ctx.fillRect(0, y, 64, 3);
+                let shift = (y % 32 === 0) ? 0 : 16;
+                for(let x=shift; x<64; x+=32) ctx.fillRect(x, y, 3, 16);
             }
+            // Add noise/grit
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            for(let i=0; i<150; i++) ctx.fillRect(Math.random()*64, Math.random()*64, 2, 2);
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.magFilter = THREE.NearestFilter; // Sharp pixels
+            tex.minFilter = THREE.NearestFilter;
+            return tex;
         }
 
-        // --- Three.js Setup ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x020205);
-        scene.fog = new THREE.FogExp2(0x020205, 0.02);
+        function generateZombieTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            
+            // Clear / Transparent background
+            ctx.clearRect(0,0,64,64);
+            
+            // Draw a blocky 90s classic zombie profile
+            ctx.fillStyle = '#4d7c4d'; // Green skin
+            ctx.fillRect(24, 4, 16, 16); // Head
+            ctx.fillStyle = '#ff0000'; ctx.fillRect(28, 8, 2, 2); ctx.fillRect(34, 8, 2, 2); // Glowing red eyes
+            
+            ctx.fillStyle = '#443355'; ctx.fillRect(16, 20, 32, 24); // Tattered shirt
+            ctx.fillStyle = '#4d7c4d'; ctx.fillRect(8, 20, 8, 8); ctx.fillRect(48, 20, 8, 8); // Outstretched arms
+            
+            ctx.fillStyle = '#222233'; ctx.fillRect(20, 44, 10, 16); ctx.fillRect(34, 44, 10, 16); // Pants
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.magFilter = THREE.NearestFilter;
+            tex.minFilter = THREE.NearestFilter;
+            return tex;
+        }
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 150);
-        camera.position.set(0, 2, 0); // Player starting viewpoint
+        // --- Core Setup & Map Array ---
+        // 1 = Wall, 0 = Empty Corridor
+        const mapGrid = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,0,1,0,1,1,1,1,0,1,1,1,0,1],
+            [1,0,1,0,0,0,1,0,0,1,0,1,0,0,0,1],
+            [1,0,1,1,1,1,1,0,0,1,0,1,0,1,1,1],
+            [1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1],
+            [1,1,1,0,1,1,1,1,0,1,0,1,1,1,0,1],
+            [1,0,0,0,1,0,0,1,0,0,0,0,0,1,0,1],
+            [1,0,1,1,1,0,0,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+        const tileSize = 4;
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        document.body.appendChild(renderer.domElement);
-
-        // --- Lighting ---
-        const ambientLight = new THREE.AmbientLight(0x112211, 1.0);
-        scene.add(ambientLight);
-
-        const dirLight = new THREE.DirectionalLight(0x00ff00, 1.0);
-        dirLight.position.set(5, 20, 5);
-        dirLight.castShadow = true;
-        scene.add(dirLight);
-
-        // --- Environment Floor (Retro Wireframe Grid) ---
-        const gridHelper = new THREE.GridHelper(100, 40, 0x00ff00, 0x004400);
-        gridHelper.position.y = 0.01;
-        scene.add(gridHelper);
-
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(100, 100),
-            new THREE.MeshStandardMaterial({ color: 0x050a05, roughness: 0.9 })
-        );
-        floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
-        scene.add(floor);
-
-        // --- Player Blaster (Low-poly Gun model attached to camera) ---
-        const gunGroup = new THREE.Group();
-        const gunBody = new THREE.Mesh(
-            new THREE.BoxGeometry(0.3, 0.3, 1.2),
-            new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7, roughness: 0.2 })
-        );
-        gunBody.position.set(0.5, -0.4, -1.0); // Offset to bottom right of screen
-        gunBody.castShadow = true;
-        gunGroup.add(gunBody);
-
-        const gunBarrel = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.06, 0.06, 0.4),
-            new THREE.MeshStandardMaterial({ color: 0x111111 })
-        );
-        gunBarrel.rotateX(Math.PI / 2);
-        gunBarrel.position.set(0.5, -0.35, -1.6);
-        gunGroup.add(gunBarrel);
-
-        camera.add(gunGroup);
-        scene.add(camera); // Adding camera to scene reveals its children (the gun)
-
-        // --- Game System Variables ---
-        let enemies = [];
-        let bullets = [];
-        let score = 0;
-        let ammo = 30;
+        let scene, camera, renderer, raycaster;
+        let wallTexture, zombieTexture;
+        let enemies = [], bullets = [];
+        let score = 0, health = 100, ammo = 50;
         let isPlaying = false;
-        let isGameOver = false;
-        let gameSpeed = 0.15;
-        let reloadTimer = 0;
 
-        // Input Arrays
-        let moveLeft = false;
-        let moveRight = false;
+        // Input Trackers
+        let keys = { w:false, s:false, a:false, d:false };
 
-        // --- Game Logic Handling ---
-        function startGame() {
-            initAudio();
-            isPlaying = true;
-            document.getElementById('start-screen').style.display = 'none';
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050505);
+            scene.fog = new THREE.FogExp2(0x050505, 0.04);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            // Spawn player into map clearing safely
+            camera.position.set(tileSize * 1.5, 2, tileSize * 1.5); 
+
+            // Render to low resolution buffer for retro pixilation architecture
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(320, 200, false); // Real DOS Mode 13h resolution limits!
+            document.body.insertBefore(renderer.domElement, document.getElementById('ui-container'));
+
+            raycaster = new THREE.Raycaster();
+
+            // Load generated visual arrays
+            wallTexture = generateBrickTexture();
+            zombieTexture = generateZombieTexture();
+
+            buildMaze();
+            spawnZombiesLoop();
+            setupControls();
+
+            animate();
         }
 
-        function fireWeapon() {
-            if (!isPlaying || isGameOver) return;
-            if (ammo <= 0) {
-                playSound('click');
-                // Auto-reload mechanical delay
-                if(reloadTimer === 0) {
-                    reloadTimer = setTimeout(() => {
-                        ammo = 30;
-                        updateHUD();
-                        reloadTimer = 0;
-                    }, 1500);
+        // --- Build 3D Map Environment ---
+        function buildMaze() {
+            const wallGeo = new THREE.BoxGeometry(tileSize, tileSize, tileSize);
+            const wallMat = new THREE.MeshBasicMaterial({ map: wallTexture });
+
+            for(let z=0; z<mapGrid.length; z++) {
+                for(let x=0; x<mapGrid[z].length; x++) {
+                    if(mapGrid[z][x] === 1) {
+                        const wall = new THREE.Mesh(wallGeo, wallMat);
+                        wall.position.set(x * tileSize, tileSize/2, z * tileSize);
+                        scene.add(wall);
+                    }
                 }
-                return;
             }
 
+            // Floor & Ceiling planes
+            const floorGeo = new THREE.PlaneGeometry(200, 200);
+            const floorMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            const ceilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+            const ceiling = new THREE.Mesh(floorGeo, ceilMat);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = tileSize;
+            scene.add(ceiling);
+        }
+
+        // --- Spawn 2.5D NPC Monsters ---
+        function spawnZombie() {
+            if(!isPlaying || health <= 0) return;
+
+            // Find an open grid slot on map randomly
+            let x, z;
+            do {
+                z = Math.floor(Math.random() * mapGrid.length);
+                x = Math.floor(Math.random() * mapGrid[0].length);
+            } while (mapGrid[z][x] !== 0);
+
+            // Create classic Billboard Sprite (Always rotates toward Camera)
+            const spriteMat = new THREE.SpriteMaterial({ map: zombieTexture, color: 0xffffff });
+            const zombie = new THREE.Sprite(spriteMat);
+            zombie.scale.set(3, 4, 1);
+            zombie.position.set(x * tileSize, 2, z * tileSize);
+            
+            zombie.isZombie = true; // Flag for raycast verification
+            scene.add(zombie);
+            enemies.push(zombie);
+        }
+
+        function spawnZombiesLoop() {
+            if(enemies.length < 8) spawnZombie();
+            setTimeout(spawnZombiesLoop, 3000);
+        }
+
+        // --- Combat Weapon Mechanics ---
+        function shootWeapon() {
+            if(!isPlaying || health <= 0 || ammo <= 0) return;
             ammo--;
-            updateHUD();
-            playSound('pew');
+            document.getElementById('hud-ammo').innerText = ammo;
 
-            // Recoil animation effect
-            gunGroup.position.z += 0.2;
+            // Flash screen background briefly to mimic muzzle flash
+            scene.background.setHex(0x554422);
+            setTimeout(() => scene.background.setHex(0x050505), 50);
 
-            // Spawn Projectile
-            const b = new THREE.Mesh(
-                new THREE.SphereGeometry(0.15, 8, 8),
-                new THREE.MeshBasicMaterial({ color: 0xffff00 })
-            );
-            b.position.set(camera.position.x + 0.5, camera.position.y - 0.35, camera.position.z - 1.6);
-            scene.add(b);
-            bullets.push(b);
+            // Raycast down center crosshair
+            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+            const intersects = raycaster.intersectObjects(enemies);
+
+            if(intersects.length > 0) {
+                let hitZombie = intersects[0].object;
+                
+                // Explode / Remove Zombie from processing
+                scene.remove(hitZombie);
+                enemies = enemies.filter(e => e !== hitZombie);
+                
+                score += 10;
+                document.getElementById('hud-score').innerText = score;
+            }
         }
 
-        function spawnEnemy() {
-            if (!isPlaying || isGameOver) return;
+        // --- Physics & Grid Collisions ---
+        function checkWallCollision(newX, newZ) {
+            // Convert coordinate checks back to integers mapping array dimensions
+            let gridX = Math.floor((newX + tileSize/2) / tileSize);
+            let gridZ = Math.floor((newZ + tileSize/2) / tileSize);
 
-            // Simple low-budget shapes (Cubes, Pyramids, Cylinders)
-            const shapes = [
-                new THREE.BoxGeometry(1.5, 1.5, 1.5),
-                new THREE.ConeGeometry(1, 2, 4),
-                new THREE.CylinderGeometry(0.8, 0.8, 1.8, 6)
-            ];
-            
-            const randomGeo = shapes[Math.floor(Math.random() * shapes.length)];
-            const enemyMat = new THREE.MeshStandardMaterial({ 
-                color: Math.random() > 0.5 ? 0xff0055 : 0xffaa00, 
-                flatShading: true 
-            });
-
-            const enemy = new THREE.Mesh(randomGeo, enemyMat);
-            enemy.position.set((Math.random() - 0.5) * 30, 1, -60); // Random horizon span
-            enemy.castShadow = true;
-            
-            scene.add(enemy);
-            enemies.push(enemy);
-
-            // Dynamic scaling spawn speed based on progression
-            setTimeout(spawnEnemy, Math.max(400, 2000 - (score * 5)));
+            if(gridZ >= 0 && gridZ < mapGrid.length && gridX >= 0 && gridX < mapGrid[0].length) {
+                return mapGrid[gridZ][gridX] === 1;
+            }
+            return true;
         }
-        setTimeout(spawnEnemy, 2000);
 
-        // --- Main System Loop ---
+        // --- Main Frame Engine ---
+        let moveSpeed = 0.12;
+        let rotSpeed = 0.04;
+
         function animate() {
             requestAnimationFrame(animate);
 
-            if (isPlaying && !isGameOver) {
-                // Return weapon from recoil slowly
-                gunGroup.position.z += (0 - gunGroup.position.z) * 0.1;
+            if (isPlaying && health > 0) {
+                // Direction vectors tracking camera gaze orientation
+                let forwardX = -Math.sin(camera.rotation.y);
+                let forwardZ = -Math.cos(camera.rotation.y);
 
-                // Handle Player Locomotion
-                if (moveLeft && camera.position.x > -18) camera.position.x -= 0.25;
-                if (moveRight && camera.position.x < 18) camera.position.x += 0.25;
+                let nextX = camera.position.x;
+                let nextZ = camera.position.z;
 
-                // Update Projectiles
-                for (let i = bullets.length - 1; i >= 0; i--) {
-                    bullets[i].position.z -= 1.5; // High velocity forward
+                // Move Input updates
+                if (keys.w) { nextX += forwardX * moveSpeed; nextZ += forwardZ * moveSpeed; }
+                if (keys.s) { nextX -= forwardX * moveSpeed; nextZ -= forwardZ * moveSpeed; }
+                
+                // Turn view inputs
+                if (keys.a) camera.rotation.y += rotSpeed;
+                if (keys.d) camera.rotation.y -= rotSpeed;
+
+                // Apply location delta if bounds clear walls cleanly
+                if (!checkWallCollision(nextX, camera.position.z)) camera.position.x = nextX;
+                if (!checkWallCollision(camera.position.x, nextZ)) camera.position.z = nextZ;
+
+                // Process Monsters AI Routine
+                for(let i=enemies.length-1; i>=0; i--) {
+                    let zomb = enemies[i];
                     
-                    // Out of bounds cleaning
-                    if (bullets[i].position.z < -70) {
-                        scene.remove(bullets[i]);
-                        bullets.splice(i, 1);
-                    }
-                }
+                    // Track path directly towards player coords
+                    let dirX = camera.position.x - zomb.position.x;
+                    let dirZ = camera.position.z - zomb.position.z;
+                    let dist = Math.sqrt(dirX*dirX + dirZ*dirZ);
 
-                // Update Invading Fleet
-                for (let i = enemies.length - 1; i >= 0; i--) {
-                    let enemy = enemies[i];
-                    enemy.position.z += gameSpeed;
-                    enemy.rotation.y += 0.02; // Rotate for dynamic feel
-
-                    // Check if enemies breach base defense lines
-                    if (enemy.position.z > 2) {
-                        triggerGameOver();
-                    }
-
-                    // Collision Detection (Simple Radius Check)
-                    for (let j = bullets.length - 1; j >= 0; j--) {
-                        let dist = enemy.position.distanceTo(bullets[j].position);
-                        if (dist < 1.5) { // Impact match
-                            playSound('boom');
-                            
-                            // Visual deletion processing
-                            scene.remove(enemy);
-                            enemies.splice(i, 1);
-                            scene.remove(bullets[j]);
-                            bullets.splice(j, 1);
-
-                            score += 100;
-                            gameSpeed += 0.002; // Game accelerates
-                            updateHUD();
-                            break;
-                        }
+                    if(dist > 1.2) {
+                        zomb.position.x += (dirX / dist) * 0.03;
+                        zomb.position.z += (dirZ / dist) * 0.03;
+                    } else {
+                        // Monster touches player -> Inflict damage frame rules
+                        health -= 0.5;
+                        document.getElementById('hud-health').innerText = Math.max(0, Math.floor(health)) + "%";
+                        if(health <= 0) triggerGameOver();
                     }
                 }
             }
@@ -322,73 +348,63 @@
             renderer.render(scene, camera);
         }
 
-        // --- UI & Controls Plumbing ---
-        function updateHUD() {
-            document.getElementById('stats').innerText = 
-                `SCORE: ${String(score).padStart(4, '0')} | AMMO: ${reloadTimer ? 'RELOADING' : ammo}`;
+        // --- Plumbing & Control Maps ---
+        function setupControls() {
+            // PC standard keyboard layout hooks
+            window.addEventListener('keydown', (e) => {
+                if(e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') keys.w = true;
+                if(e.key.toLowerCase() === 's' || e.key === 'ArrowDown') keys.s = true;
+                if(e.key.toLowerCase() === 'a' || e.key === 'ArrowLeft') keys.a = true;
+                if(e.key.toLowerCase() === 'd' || e.key === 'ArrowRight') keys.d = true;
+                if(e.key === ' ') shootWeapon();
+            });
+            window.addEventListener('keyup', (e) => {
+                if(e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') keys.w = false;
+                if(e.key.toLowerCase() === 's' || e.key === 'ArrowDown') keys.s = false;
+                if(e.key.toLowerCase() === 'a' || e.key === 'ArrowLeft') keys.a = false;
+                if(e.key.toLowerCase() === 'd' || e.key === 'ArrowRight') keys.d = false;
+            });
+
+            // Mobile tactile screen binding logic
+            const bindMobile = (id, targetKey) => {
+                const btn = document.getElementById(id);
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[targetKey] = true; });
+                btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[targetKey] = false; });
+            };
+            bindMobile('btn-w', 'w'); bindMobile('btn-s', 's');
+            bindMobile('btn-a', 'a'); bindMobile('btn-d', 'd');
+            document.getElementById('fire-btn').addEventListener('touchstart', (e) => { e.preventDefault(); shootWeapon(); });
+        }
+
+        function startGame() {
+            isPlaying = true;
+            document.getElementById('start-screen').style.display = 'none';
         }
 
         function triggerGameOver() {
-            isGameOver = true;
-            document.getElementById('game-over').style.display = 'block';
-            document.getElementById('final-score').innerText = "SCORE: " + score;
+            isPlaying = false;
+            document.getElementById('game-over-screen').style.display = 'block';
         }
 
-        function resetGame() {
+        function restartGame() {
             enemies.forEach(e => scene.remove(e));
-            bullets.forEach(b => scene.remove(b));
             enemies = [];
-            bullets = [];
-            score = 0;
-            ammo = 30;
-            gameSpeed = 0.15;
-            camera.position.x = 0;
-            isGameOver = false;
-            updateHUD();
-            document.getElementById('game-over').style.display = 'none';
+            health = 100; ammo = 50; score = 0;
+            document.getElementById('hud-health').innerText = "100%";
+            document.getElementById('hud-ammo').innerText = "50";
+            document.getElementById('hud-score').innerText = "0";
+            camera.position.set(tileSize * 1.5, 2, tileSize * 1.5);
+            camera.rotation.set(0,0,0);
+            document.getElementById('game-over-screen').style.display = 'none';
+            isPlaying = true;
         }
-
-        function changeQuality(val) {
-            if (val === 'low') {
-                renderer.shadowMap.enabled = false;
-                dirLight.castShadow = false;
-                scene.fog.density = 0.05; // Dense fog to cover object dropoff performance tricks
-            } else {
-                renderer.shadowMap.enabled = true;
-                dirLight.castShadow = true;
-                scene.fog.density = 0.02;
-            }
-            scene.traverse(c => { if(c.material) c.material.needsUpdate = true; });
-        }
-
-        // Setup Event Listeners (PC Input mapping)
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = true;
-            if (e.key === 'd' || e.key === 'ArrowRight') moveRight = true;
-            if (e.key === ' ') fireWeapon();
-        });
-        window.addEventListener('keyup', (e) => {
-            if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = false;
-            if (e.key === 'd' || e.key === 'ArrowRight') moveRight = false;
-        });
-
-        // Touch Hooks (Mobile optimization mapping)
-        const bindTouch = (id, callback) => {
-            const el = document.getElementById(id);
-            el.addEventListener('touchstart', (e) => { e.preventDefault(); callback(true); });
-            el.addEventListener('touchend', (e) => { e.preventDefault(); callback(false); });
-        };
-        bindTouch('left-btn', (state) => moveLeft = state);
-        bindTouch('right-btn', (state) => moveRight = state);
-        document.getElementById('fire-btn').addEventListener('touchstart', (e) => { e.preventDefault(); fireWeapon(); });
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        animate();
+        window.onload = init;
     </script>
 </body>
 </html>
