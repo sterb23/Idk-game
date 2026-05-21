@@ -3,151 +3,737 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DOOM: Tribute Edition</title>
+    <title>DOOM: 16-Bit Tribute Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         body, html {
             margin: 0; padding: 0; overflow: hidden;
-            background-color: #000; font-family: 'Courier New', Courier, monospace;
+            background-color: #000; font-family: 'Press Start 2P', monospace;
             touch-action: none; user-select: none;
         }
-        /* 320x200 DOS Retro Scaling */
+        /* 320x200 DOS Pixel Scaling Viewport */
         #game-viewport {
             width: 100vw; height: calc(100vh - 60px);
             display: block;
             image-rendering: crisp-edges; image-rendering: pixelated;
-            background: #111;
         }
         
-        /* UI Layers */
+        /* UI Engine Layers */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
         }
         
-        /* Main Retro Menu */
+        /* 16-Bit Styled Menu Architecture */
         .menu-screen {
             position: absolute; top:0; left:0; width:100%; height:100%;
-            background: #0f0000; color: #ff3333; display: flex; flex-direction: column;
+            background: #141419; color: #ff3333; display: flex; flex-direction: column;
             align-items: center; justify-content: center; z-index: 1000; pointer-events: auto;
-            border: 8px solid #333; box-sizing: border-box; text-align: center;
+            border: 8px double #444; box-sizing: border-box; text-align: center;
+            padding: 10px;
         }
-        .menu-screen h1 { font-size: 54px; margin: 0; text-shadow: 4px 4px #000; letter-spacing: 4px; }
+        .menu-screen h1 { font-size: 24px; margin-bottom: 15px; text-shadow: 4px 4px #000; color: #cc0000; letter-spacing: -1px; }
         .menu-panel {
-            background: #1a0505; border: 3px dashed #ff3333; padding: 20px; 
-            max-width: 500px; margin: 15px; color: #fff; font-size: 14px; line-height: 1.5;
-            box-shadow: 0 0 15px rgba(255, 0, 0, 0.2);
+            background: #000; border: 4px solid #ff3333; padding: 16px; 
+            max-width: 540px; margin: 10px; color: #fff; font-size: 9px; line-height: 1.8;
+            box-shadow: 6px 6px 0px #222;
         }
-        
         .menu-btn {
-            background: #330000; color: #ff9999; border: 2px solid #ff3333;
-            padding: 12px 30px; font-family: inherit; font-size: 18px; font-weight: bold;
-            cursor: pointer; margin-top: 20px; width: 100%; box-sizing: border-box;
-            transition: all 0.1s ease;
+            background: #cc0000; color: white; border: 4px solid #ff6666;
+            padding: 12px 24px; font-size: 11px; font-weight: bold; cursor: pointer;
+            font-family: inherit; margin-top: 15px; box-shadow: 5px 5px 0px #000;
         }
-        .menu-btn:hover {
-            background: #ff3333; color: #000; box-shadow: 0 0 10px #ff3333;
+        .menu-btn:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0px #000; }
+
+        /* HUD Status Bar Platform */
+        #doom-hud {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 60px;
+            background: #222228; border-top: 6px double #444;
+            display: flex; justify-content: center; align-items: center; gap: 20px;
+            color: #ff3333; font-size: 14px; font-weight: bold; pointer-events: auto;
+            box-sizing: border-box;
+        }
+        .hud-stat { text-align: center; background: #000; padding: 6px 8px; border: 3px solid #555; width: 90px;}
+        .hud-stat span { color: #888; display: block; font-size: 7px; margin-bottom: 5px; letter-spacing: 0px; }
+
+        /* Crosshair */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: rgba(255,0,0,0.5); font-size: 16px; pointer-events: none;
         }
 
-        /* Classic Retro Status Bar HUD */
-        #hud {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 60px;
-            background: #222; border-top: 4px solid #444; color: #ff3333;
-            display: flex; justify-content: space-around; align-items: center;
-            font-size: 14px; pointer-events: auto; box-sizing: border-box;
-            font-weight: bold; text-shadow: 2px 2px #000;
+        /* 2D Lowered Weapon Anchor Frame */
+        #weapon-container {
+            position: absolute; bottom: 54px; left: 50%; transform: translateX(-50%);
+            width: 320px; height: 200px; pointer-events: none; overflow: hidden;
         }
-        .hud-stat { text-align: center; flex: 1; border-right: 2px solid #333; }
-        .hud-stat:last-child { border-right: none; }
-        .hud-stat span { display: block; color: #ffcc00; font-size: 24px; font-family: 'Arial Black', sans-serif; }
-        
-        .hidden { display: none !important; }
+        #weapon-canvas {
+            width: 100%; height: 100%; image-rendering: pixelated;
+        }
+
+        /* Mobile Input Shell Elements */
+        #mobile-container {
+            position: absolute; bottom: 80px; left:0; width:100%;
+            display: flex; justify-content: space-between; align-items: flex-end;
+            padding: 0 30px; box-sizing: border-box; pointer-events: none;
+        }
+        #joystick-zone {
+            width: 110px; height: 110px; background: rgba(255,255,255,0.1);
+            border: 4px dashed rgba(255,255,255,0.3); border-radius: 50%;
+            position: relative; pointer-events: auto; display: none;
+        }
+        #joystick-stick {
+            width: 40px; height: 40px; background: #ff3333; border-radius: 50%;
+            position: absolute; top: 35px; left: 35px; box-shadow: 0 4px 5px rgba(0,0,0,0.5);
+        }
+        #mobile-fire {
+            width: 80px; height: 80px; background: #cc0000; border: 4px dashed #ff3333;
+            border-radius: 50%; color: white; font-weight: bold; font-size: 11px;
+            display: none; align-items: center; justify-content: center; pointer-events: auto;
+            box-shadow: 0 4px 5px rgba(0,0,0,0.5); font-family: inherit;
+        }
+        #mobile-fire:active { background: #ff3333; }
     </style>
 </head>
 <body>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <div id="game-container"></div>
+    <div id="crosshair">+</div>
+
     <div id="ui-layer">
         <div id="main-menu" class="menu-screen">
-            <h1>DOOM</h1>
-            <div style="color: #888; font-size: 12px; letter-spacing: 2px; margin-bottom: 10px;">TRIBUTE ENGINE</div>
+            <h1>DOOM: 16-BIT RUN</h1>
             <div class="menu-panel">
-                <p>Welcome back, Marine. You are looking at a hardware-accelerated, canvas-driven retro simulation layer running at a crisp 320x200 pixel block format.</p>
-                <button class="menu-btn" onclick="startTribute()">START MISSION</button>
+                <span style="color: #ff3333; font-weight: bold;">[OPERATIONAL ORDERS]</span><br><br>
+                Clear out the retro maze segments. If your weapon runs dry, explore the corridors to collect vital ammunition drops immediately.<br><br>
+                <span style="color: #00ffaa;">DESKTOP MAP CONTROLS:</span><br>
+                • Move: <span style="color:#00ffff">W / S</span> or Up/Down keys<br>
+                • Turn View: <span style="color:#00ffff">A / D</span> or Left/Right keys<br>
+                • Trigger Weapon: <span style="color:#00ffff">SPACEBAR</span><br><br>
+                <span style="color: #00ffaa;">MOBILE TOUCH SYSTEM:</span><br>
+                • Left D-Pad Stick to Traverse & Aim<br>
+                • Right Red Action Area node to Fire
             </div>
+            <button class="menu-btn" onclick="startGame()">ENGAGE DRIVE</button>
         </div>
 
-        <div id="hud" class="hidden">
-            <div class="hud-stat">AMMO <span>050</span></div>
-            <div class="hud-stat">HEALTH <span>100%</span></div>
-            <div class="hud-stat">ARMOR <span>00%</span></div>
-            <div class="hud-stat">BULL <span>200</span></div>
+        <div id="game-over-screen" class="menu-screen" style="display:none;">
+            <h1 style="color:#cc0000;">SYSTEM TERMINATED</h1>
+            <p style="font-size: 9px; color: #fff; margin-bottom: 10px;">You ran out of juice against the horde.</p>
+            <button class="menu-btn" onclick="restartGame()">REBOOT RUN</button>
+        </div>
+
+        <div id="weapon-container">
+            <canvas id="weapon-canvas" width="160" height="100"></canvas>
+        </div>
+
+        <div id="mobile-container">
+            <div id="joystick-zone"><div id="joystick-stick"></div></div>
+            <div id="mobile-fire">FIRE</div>
+        </div>
+
+        <div id="doom-hud">
+            <div class="hud-stat"><span id="ammo-label">AMMO</span><div id="hud-ammo">50</div></div>
+            <div class="hud-stat" style="color: #00ffaa;"><span>HEALTH</span><div id="hud-health">100%</div></div>
+            <div class="hud-stat" style="color: #ffff00;"><span>FRAGS</span><div id="hud-score">0</div></div>
         </div>
     </div>
 
-    <canvas id="game-viewport" width="320" height="200"></canvas>
-
     <script>
-        const canvas = document.getElementById('game-viewport');
-        const ctx = canvas.getContext('2d');
-        let gameRunning = false;
-        let tick = 0;
+        // --- Web Audio Retro Synthesizer Pipeline ---
+        let audioCtx = null;
+        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
 
-        function startTribute() {
-            document.getElementById('main-menu').classList.add('hidden');
-            document.getElementById('hud').classList.remove('hidden');
-            gameRunning = true;
-            gameLoop();
+        function playSound(type) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            
+            if (type === 'pistol') {
+                const bufferSize = audioCtx.sampleRate * 0.15;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseGain = audioCtx.createGain();
+                noiseGain.gain.setValueAtTime(0.4, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                
+                const osc = audioCtx.createOscillator();
+                const oscGain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.linearRampToValueAtTime(40, now + 0.1);
+                oscGain.gain.setValueAtTime(0.3, now);
+                oscGain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+
+                noise.connect(noiseGain); noiseGain.connect(audioCtx.destination);
+                osc.connect(oscGain); oscGain.connect(audioCtx.destination);
+                noise.start(now); osc.start(now); osc.stop(now + 0.1);
+            } 
+            else if (type === 'click') {
+                // Empty gun clip noise execution
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(120, now);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.05);
+            }
+            else if (type === 'pickup') {
+                // Ammunition cache capture sweep tone
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(260, now);
+                osc.frequency.setValueAtTime(520, now + 0.07);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.2);
+            }
+            else if (type === 'death') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(130, now);
+                osc.frequency.linearRampToValueAtTime(25, now + 0.45);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.45);
+            }
+            else if (type === 'groan') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(70, now);
+                osc.frequency.setValueAtTime(80, now + 0.12);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.3);
+            }
         }
 
-        // A simple pseudo-3D floor, ceiling, and wall scroller to emulate 90s engines
-        function renderScene() {
-            tick++;
-            
-            // 1. Draw Ceiling (Dark Blue/Gray)
-            ctx.fillStyle = '#14141c';
-            ctx.fillRect(0, 0, 320, 100);
-            
-            // 2. Draw Floor (Dark Brown/Gray)
-            ctx.fillStyle = '#221a15';
-            ctx.fillRect(0, 100, 320, 100);
+        // --- 16-Bit Shaded Texture Generators ---
+        function generateBrickTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            // Base brick mass
+            ctx.fillStyle = '#561c1c'; ctx.fillRect(0,0,64,64);
+            // Internal 16-bit texturing and grain noise noise shadows
+            for(let y=0; y<64; y+=16) {
+                // Mortar dark seams
+                ctx.fillStyle = '#1c0707'; ctx.fillRect(0, y, 64, 3);
+                let shift = (y % 32 === 0) ? 0 : 16;
+                for(let x=0; x<64; x+=32) {
+                    ctx.fillRect((x+shift)%64, y, 3, 16);
+                    // Shading Highlights inside individual bricks
+                    ctx.fillStyle = '#7a2b2b';
+                    ctx.fillRect((x+shift+3)%64, y+3, 26, 2);
+                    ctx.fillRect((x+shift+3)%64, y+3, 2, 10);
+                    // Shadow lowlights
+                    ctx.fillStyle = '#381010';
+                    ctx.fillRect((x+shift+3)%64, y+13, 28, 2);
+                    ctx.fillRect((x+shift+29)%64, y+3, 2, 12);
+                }
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.magFilter = tex.minFilter = THREE.NearestFilter;
+            return tex;
+        }
 
-            // 3. Render Pseudo-3D Walls (Raycast Simulator Effect)
-            const totalColumns = 80; // Grouping pixels to make it look chunky
-            const colWidth = 320 / totalColumns;
+        function generateFloorTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#282830'; ctx.fillRect(0,0,32,32);
+            // Retro metal panel grit noise pattern
+            for(let i=0; i<80; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#1f1f24' : '#34343d';
+                ctx.fillRect(Math.floor(Math.random()*32), Math.floor(Math.random()*32), 2, 2);
+            }
+            // Steel panel lines
+            ctx.fillStyle = '#15151a';
+            ctx.fillRect(0, 0, 32, 2); ctx.fillRect(0, 0, 2, 32);
+            ctx.fillStyle = '#444450';
+            ctx.fillRect(0, 30, 32, 2); ctx.fillRect(30, 0, 2, 32);
 
-            for (let i = 0; i < totalColumns; i++) {
-                // Generates a wavy wall corridor perspective
-                const distance = 1.5 + Math.abs(Math.sin((i + tick * 0.5) * 0.08) * 3);
-                const wallHeight = Math.min(200, 180 / distance);
-                const yTop = (200 - wallHeight) / 2;
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(16, 16);
+            tex.magFilter = tex.minFilter = THREE.NearestFilter;
+            return tex;
+        }
 
-                // Alternate wall slice shading for depth texturing
-                const baseColor = (i % 2 === 0) ? 110 : 80;
-                // Dim the color further based on distance (Atmospheric fogging)
-                const shade = Math.max(20, baseColor - (distance * 15));
+        function generateCeilingTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#1a1414'; ctx.fillRect(0,0,32,32);
+            // Grimy light distributions
+            for(let i=0; i<40; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#110d0d' : '#261f1f';
+                ctx.fillRect(Math.floor(Math.random()*32), Math.floor(Math.random()*32), 2, 2);
+            }
+            // Structural iron cross bars
+            ctx.fillStyle = '#0d0a0a';
+            ctx.fillRect(0, 14, 32, 4); ctx.fillRect(14, 0, 4, 32);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(16, 16);
+            tex.magFilter = tex.minFilter = THREE.NearestFilter;
+            return tex;
+        }
+
+        let ammoTexture = null;
+        function generateAmmoTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,16,16);
+            // Steel box base shell
+            ctx.fillStyle = '#444444'; ctx.fillRect(2, 6, 12, 8);
+            ctx.fillStyle = '#666666'; ctx.fillRect(3, 7, 10, 2);
+            ctx.fillStyle = '#222222'; ctx.fillRect(2, 13, 12, 1);
+            // Rows of solid brass rifle rounds (Yellow/Gold color array)
+            ctx.fillStyle = '#c6953c';
+            ctx.fillRect(4, 2, 2, 4); ctx.fillRect(7, 2, 2, 4); ctx.fillRect(10, 2, 2, 4);
+            ctx.fillStyle = '#e5c158';
+            ctx.fillRect(4, 1, 2, 1); ctx.fillRect(7, 1, 2, 1); ctx.fillRect(10, 1, 2, 1);
+
+            ammoTexture = new THREE.CanvasTexture(canvas);
+            ammoTexture.magFilter = ammoTexture.minFilter = THREE.NearestFilter;
+        }
+
+        // Animated Zombie Sprite Frame Arrays (Shaded 16-bit rendering edits)
+        const zombieFrames = [];
+        function generateZombieTextures() {
+            const shades = [
+                ['#2d542d', '#1e3a1e', '#417741'], // Frame 0 system palette colors
+                ['#244424', '#172d17', '#356335']  // Frame 1 system palette colors
+            ];
+            for(let frame=0; frame<2; frame++) {
+                const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0,0,64,64);
                 
-                ctx.fillStyle = `rgb(${shade}, ${shade * 0.2}, ${shade * 0.2})`;
-                ctx.fillRect(i * colWidth, yTop, colWidth, wallHeight);
-                
-                // Add a simple grid/border overlay to slices for texture illusion
-                ctx.fillStyle = 'rgba(0,0,0,0.15)';
-                if (i % 4 === 0) ctx.fillRect(i * colWidth, yTop, 1, wallHeight);
+                // Head + Face highlights
+                ctx.fillStyle = shades[frame][0]; ctx.fillRect(24, 4, 16, 16);
+                ctx.fillStyle = shades[frame][2]; ctx.fillRect(26, 6, 6, 4);
+                ctx.fillStyle = '#ff0000'; ctx.fillRect(28, 10, 2, 2); ctx.fillRect(34, 10, 2, 2); // Glowing visual optic fields
+
+                // Layered torso clothing setup
+                ctx.fillStyle = '#423356'; ctx.fillRect(16, 20, 32, 22);
+                ctx.fillStyle = '#594673'; ctx.fillRect(20, 22, 24, 18);
+
+                // Alternating frame walking legs animations structures
+                ctx.fillStyle = shades[frame][0];
+                if(frame === 0) {
+                    ctx.fillRect(8, 20, 8, 14); ctx.fillRect(48, 20, 8, 6);
+                    ctx.fillStyle = '#1c1c2b'; ctx.fillRect(18, 42, 10, 22); ctx.fillRect(36, 42, 10, 14);
+                } else {
+                    ctx.fillRect(8, 20, 8, 6); ctx.fillRect(48, 20, 8, 14);
+                    ctx.fillStyle = '#1c1c2b'; ctx.fillRect(18, 42, 10, 14); ctx.fillRect(36, 42, 10, 22);
+                }
+                const tex = new THREE.CanvasTexture(canvas);
+                tex.magFilter = tex.minFilter = THREE.NearestFilter;
+                zombieFrames.push(tex);
+            }
+        }
+
+        // --- Viewport 2D Handgun Sprite Pipeline (Lowered Execution Variant) ---
+        const wCanvas = document.getElementById('weapon-canvas');
+        const wCtx = wCanvas.getContext('2d');
+        let weaponState = 'idle';
+        let weaponFrameTimer = 0;
+        let weaponBobX = 0, weaponBobY = 0;
+
+        function renderWeapon() {
+            wCtx.clearRect(0,0,160,100);
+            // Gun shifted lower down vertically from base offset (Y target adjusted from 45 -> 62)
+            let targetX = 60 + weaponBobX;
+            let targetY = 62 + weaponBobY; 
+
+            if (weaponState === 'firing') {
+                // Classic bright flash backdrops
+                wCtx.fillStyle = '#ff9900';
+                wCtx.beginPath(); wCtx.arc(80, 60, 20, 0, Math.PI*2); wCtx.fill();
+                wCtx.fillStyle = '#ffff99';
+                wCtx.beginPath(); wCtx.arc(80, 60, 11, 0, Math.PI*2); wCtx.fill();
+                targetY += 7; // Recoil offset punch
             }
 
-            // 4. Draw Crosshair
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
-            ctx.fillRect(159, 99, 2, 2);
+            // High Precision 16-Bit Gun Compositing
+            wCtx.fillStyle = '#3a3a40'; wCtx.fillRect(targetX, targetY, 40, 60); 
+            wCtx.fillStyle = '#52525c'; wCtx.fillRect(targetX+2, targetY, 36, 25); // Mid slide luster
+            wCtx.fillStyle = '#25252a'; wCtx.fillRect(targetX+12, targetY-12, 16, 30); // Top barrel profile
+            wCtx.fillStyle = '#1a1a1d'; wCtx.fillRect(targetX+14, targetY-12, 12, 4); // Chamber track
+            wCtx.fillStyle = '#4c352b'; wCtx.fillRect(targetX+6, targetY+24, 28, 36); // Checkered grip plates
+            wCtx.fillStyle = '#000000'; wCtx.fillRect(targetX+18, targetY-15, 4, 3); // Iron targeting pin
         }
 
-        function gameLoop() {
-            if (!gameRunning) return;
-            renderScene();
-            requestAnimationFrame(gameLoop);
+        // --- Core Arena Maps Configurations ---
+        const mapGrid = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,0,1,0,1,1,1,1,0,1,1,1,0,1],
+            [1,0,1,0,0,0,1,0,0,1,0,1,0,0,0,1],
+            [1,0,1,1,1,1,1,0,0,1,0,1,0,1,1,1],
+            [1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1],
+            [1,1,1,0,1,1,1,1,0,1,0,1,1,1,0,1],
+            [1,0,0,0,1,0,0,1,0,0,0,0,0,1,0,1],
+            [1,0,1,1,1,0,0,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+        const tileSize = 4;
+
+        let scene, camera, renderer, raycaster;
+        let enemies = [], ammoPickups = [], score = 0, health = 100, ammo = 50;
+        let isPlaying = false, walkCycleTime = 0;
+
+        let keys = { w:false, s:false, a:false, d:false };
+        let joyVector = { x: 0, y: 0 };
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020205);
+            scene.fog = new THREE.FogExp2(0x020205, 0.06);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / (window.innerHeight - 60), 0.1, 100);
+            camera.position.set(tileSize * 1.5, 2, tileSize * 1.5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(320, 200, false);
+            renderer.domElement.id = "game-viewport";
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            raycaster = new THREE.Raycaster();
+
+            generateAmmoTexture();
+            generateZombieTextures();
+            buildMaze();
+            setupControls();
+            renderWeapon();
+            seedAmmoSupplies();
+
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                document.getElementById('joystick-zone').style.display = 'block';
+                document.getElementById('mobile-fire').style.display = 'flex';
+            }
+
+            animate();
+            spawnLoop();
         }
 
-        // Basic resize handler to keep aspect ratio scaling crisp
+        function buildMaze() {
+            const wallGeo = new THREE.BoxGeometry(tileSize, tileSize, tileSize);
+            const wallMat = new THREE.MeshBasicMaterial({ map: generateBrickTexture() });
+
+            for(let z=0; z<mapGrid.length; z++) {
+                for(let x=0; x<mapGrid[z].length; x++) {
+                    if(mapGrid[z][x] === 1) {
+                        const wall = new THREE.Mesh(wallGeo, wallMat);
+                        wall.position.set(x * tileSize, tileSize/2, z * tileSize);
+                        scene.add(wall);
+                    }
+                }
+            }
+
+            // Fully Textured Planes
+            const floorGeo = new THREE.PlaneGeometry(200, 200);
+            const floorMat = new THREE.MeshBasicMaterial({ map: generateFloorTexture() });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2; scene.add(floor);
+
+            const ceilingMat = new THREE.MeshBasicMaterial({ map: generateCeilingTexture() });
+            const ceiling = new THREE.Mesh(floorGeo, ceilingMat);
+            ceiling.rotation.x = Math.PI / 2; ceiling.position.y = tileSize; scene.add(ceiling);
+        }
+
+        // --- Ground Ammo Drop Placement Spawner Engine ---
+        function dropAmmoClip(x, z) {
+            const spriteMat = new THREE.SpriteMaterial({ map: ammoTexture, color: 0xffffff });
+            const clip = new THREE.Sprite(spriteMat);
+            clip.scale.set(1.2, 1.2, 1);
+            clip.position.set(x * tileSize, 0.4, z * tileSize);
+            scene.add(clip);
+            ammoPickups.push(clip);
+        }
+
+        function seedAmmoSupplies() {
+            // Initial map coordinates containing ample ammunition reserves
+            const points = [[1,3], [5,1], [8,5], [13,2], [7,9], [14,7]];
+            points.forEach(p => dropAmmoClip(p[0], p[1]));
+        }
+
+        // --- Non-Player Character Zombie Spawner ---
+        function spawnZombie() {
+            if(!isPlaying || health <= 0) return;
+            let x, z;
+            do {
+                z = Math.floor(Math.random() * mapGrid.length);
+                x = Math.floor(Math.random() * mapGrid[0].length);
+            } while (mapGrid[z][x] !== 0 || (x < 3 && z < 3));
+
+            const spriteMat = new THREE.SpriteMaterial({ map: zombieFrames[0], color: 0xffffff });
+            const zombie = new THREE.Sprite(spriteMat);
+            zombie.scale.set(3.2, 4.0, 1);
+            zombie.position.set(x * tileSize, 2, z * tileSize);
+            zombie.animFrame = 0;
+            scene.add(zombie);
+            enemies.push(zombie);
+            playSound('groan');
+        }
+
+        function spawnLoop() {
+            if(enemies.length < 6) spawnZombie();
+            setTimeout(spawnLoop, 3000);
+        }
+
+        // --- Core Combat Weapons Actions ---
+        function fireWeapon() {
+            if(!isPlaying || health <= 0 || weaponState === 'firing') return;
+            
+            // Check depletion constraints: Forced to track drop clips if empty
+            if (ammo <= 0) {
+                playSound('click');
+                flashAmmoHUD();
+                return;
+            }
+            
+            ammo--;
+            updateAmmoHUD();
+            playSound('pistol');
+
+            weaponState = 'firing';
+            renderWeapon();
+
+            scene.background.setHex(0x422222); // Red tinted screen muzzle flash imitation
+            setTimeout(() => {
+                scene.background.setHex(0x020205);
+                weaponState = 'idle';
+                renderWeapon();
+            }, 75);
+
+            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+            const hits = raycaster.intersectObjects(enemies);
+
+            if(hits.length > 0) {
+                let target = hits[0].object;
+                playSound('death');
+                
+                // Randomly drop an ammunition clip on zombie death coordinates
+                if (Math.random() > 0.4) {
+                    let mapX = Math.round(target.position.x / tileSize);
+                    let mapZ = Math.round(target.position.z / tileSize);
+                    dropAmmoClip(mapX, mapZ);
+                }
+
+                scene.remove(target);
+                enemies = enemies.filter(e => e !== target);
+                score += 10;
+                document.getElementById('hud-score').innerText = score;
+            }
+        }
+
+        function updateAmmoHUD() {
+            const el = document.getElementById('hud-ammo');
+            const label = document.getElementById('ammo-label');
+            el.innerText = ammo;
+            if(ammo <= 0) {
+                el.style.color = '#ff0000';
+                label.innerText = "EMPTY!";
+                label.style.color = '#ff0000';
+            } else {
+                el.style.color = '#ff3333';
+                label.innerText = "AMMO";
+                label.style.color = '#888888';
+            }
+        }
+
+        function flashAmmoHUD() {
+            const el = document.getElementById('hud-ammo');
+            el.style.background = '#ff0000';
+            setTimeout(() => el.style.background = '#000', 100);
+        }
+
+        function checkCollision(px, pz) {
+            let gx = Math.floor((px + tileSize/2) / tileSize);
+            let gz = Math.floor((pz + tileSize/2) / tileSize);
+            if(gz >= 0 && gz < mapGrid.length && gx >= 0 && gx < mapGrid[0].length) {
+                return mapGrid[gz][gx] === 1;
+            }
+            return true;
+        }
+
+        // --- Main Frame Update Loop Engine ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (isPlaying && health > 0) {
+                walkCycleTime += 0.05;
+
+                let moveForward = 0;
+                let rotateAngle = 0;
+
+                if (keys.w) moveForward = 1;
+                if (keys.s) moveForward = -1;
+                if (keys.a) rotateAngle = 1;
+                if (keys.d) rotateAngle = -1;
+
+                if (Math.abs(joyVector.y) > 0.1) moveForward = -joyVector.y;
+                if (Math.abs(joyVector.x) > 0.1) rotateAngle = -joyVector.x;
+
+                camera.rotation.y += rotateAngle * 0.045;
+
+                let dx = -Math.sin(camera.rotation.y) * moveForward * 0.12;
+                let dz = -Math.cos(camera.rotation.y) * moveForward * 0.12;
+
+                let nextX = camera.position.x + dx;
+                let nextZ = camera.position.z + dz;
+
+                if (!checkCollision(nextX, camera.position.z)) camera.position.x = nextX;
+                if (!checkCollision(camera.position.x, nextZ)) camera.position.z = nextZ;
+
+                // Implement procedural Bobbing matrix logic
+                if(Math.abs(moveForward) > 0.1) {
+                    weaponBobX = Math.sin(walkCycleTime * 2) * 3.5;
+                    weaponBobY = Math.abs(Math.cos(walkCycleTime * 2)) * 2.5;
+                } else {
+                    weaponBobX *= 0.8; weaponBobY *= 0.8;
+                }
+                if (weaponState === 'idle') renderWeapon();
+
+                // Process Ground Ammo Pickup Detection Matrix
+                for (let i = ammoPickups.length - 1; i >= 0; i--) {
+                    let clip = ammoPickups[i];
+                    // Compute basic planar distance to target clip position vectors
+                    let pDist = camera.position.distanceTo(clip.position);
+                    if (pDist < 1.4) {
+                        ammo += 25; // Replenish clip allocation stores
+                        updateAmmoHUD();
+                        playSound('pickup');
+                        scene.remove(clip);
+                        ammoPickups.splice(i, 1);
+                    }
+                }
+
+                // Process Zombie Behaviors & Transformations
+                let frameIndex = Math.floor(walkCycleTime * 1.5) % 2;
+                for(let i=enemies.length-1; i>=0; i--) {
+                    let z = enemies[i];
+                    z.material.map = zombieFrames[frameIndex];
+
+                    let tx = camera.position.x - z.position.x;
+                    let tz = camera.position.z - z.position.z;
+                    let d = Math.sqrt(tx*tx + tz*tz);
+
+                    if(d > 1.2) {
+                        z.position.x += (tx / d) * 0.028;
+                        z.position.z += (tz / d) * 0.028;
+                    } else {
+                        health -= 0.5;
+                        document.getElementById('hud-health').innerText = Math.max(0, Math.floor(health)) + "%";
+                        if(health <= 0) triggerGameOver();
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // --- Hardware Processing Input Map Hook Elements ---
+        function setupControls() {
+            window.addEventListener('keydown', (e) => {
+                let k = e.key.toLowerCase();
+                if(k === 'w' || k === 'arrowup') keys.w = true;
+                if(k === 's' || k === 'arrowdown') keys.s = true;
+                if(k === 'a' || k === 'arrowleft') keys.a = true;
+                if(k === 'd' || k === 'arrowright') keys.d = true;
+                if(e.key === ' ') fireWeapon();
+            });
+            window.addEventListener('keyup', (e) => {
+                let k = e.key.toLowerCase();
+                if(k === 'w' || k === 'arrowup') keys.w = false;
+                if(k === 's' || k === 'arrowdown') keys.s = false;
+                if(k === 'a' || k === 'arrowleft') keys.a = false;
+                if(k === 'd' || k === 'arrowright') keys.d = false;
+            });
+
+            // Mobile Joystick Virtual Inputs Calculations
+            const zone = document.getElementById('joystick-zone');
+            const stick = document.getElementById('joystick-stick');
+            let maxRadius = 36;
+
+            zone.addEventListener('touchstart', (e) => { initAudio(); handleTouch(e); }, {passive: false});
+            zone.addEventListener('touchmove', (e) => { handleTouch(e); }, {passive: false});
+            zone.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                stick.style.left = '35px'; stick.style.top = '35px';
+                joyVector = { x: 0, y: 0 };
+            });
+
+            function handleTouch(e) {
+                e.preventDefault();
+                let t = e.touches[0];
+                let b = zone.getBoundingClientRect();
+                let centerX = b.left + b.width / 2;
+                let centerY = b.top + b.height / 2;
+                let rawX = t.clientX - centerX;
+                let rawY = t.clientY - centerY;
+
+                let dist = Math.sqrt(rawX*rawX + rawY*rawY);
+                if (dist > maxRadius) {
+                    rawX = (rawX / dist) * maxRadius;
+                    rawY = (rawY / dist) * maxRadius;
+                }
+
+                stick.style.left = (35 + rawX) + 'px';
+                stick.style.top = (35 + rawY) + 'px';
+
+                joyVector.x = rawX / maxRadius;
+                joyVector.y = rawY / maxRadius;
+            }
+
+            document.getElementById('mobile-fire').addEventListener('touchstart', (e) => {
+                e.preventDefault(); fireWeapon();
+            });
+        }
+
+        function startGame() {
+            initAudio(); isPlaying = true;
+            document.getElementById('main-menu').style.display = 'none';
+        }
+
+        function triggerGameOver() {
+            isPlaying = false;
+            document.getElementById('game-over-screen').style.display = 'flex';
+        }
+
+        function restartGame() {
+            enemies.forEach(e => scene.remove(e)); enemies = [];
+            ammoPickups.forEach(a => scene.remove(a)); ammoPickups = [];
+            health = 100; ammo = 50; score = 0;
+            document.getElementById('hud-health').innerText = "100%";
+            updateAmmoHUD();
+            document.getElementById('hud-score').innerText = "0";
+            camera.position.set(tileSize * 1.5, 2, tileSize * 1.5);
+            camera.rotation.set(0,0,0);
+            seedAmmoSupplies();
+            document.getElementById('game-over-screen').style.display = 'none';
+            isPlaying = true;
+        }
+
         window.addEventListener('resize', () => {
-            canvas.style.width = '100vw';
-            canvas.style.height = (window.innerHeight - 60) + 'px';
+            camera.aspect = window.innerWidth / (window.innerHeight - 60);
+            camera.updateProjectionMatrix();
         });
+
+        window.onload = init;
     </script>
 </body>
 </html>
