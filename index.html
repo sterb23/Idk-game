@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>High-Fidelity Highway Drifter</title>
+    <title>Realistic Highway Driver (Day/Night)</title>
     <style>
         body, html {
             margin: 0; padding: 0; overflow: hidden;
-            background-color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #050508; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             touch-action: none;
         }
         canvas { display: block; }
@@ -61,9 +61,13 @@
                 <div id="speed-display">120 km/h</div>
             </div>
             <div class="controls-container">
-                <button id="tilt-btn" class="ui-btn" onclick="initTilt()">🚗 Enable Tilt Controls</button>
+                <button id="tilt-btn" class="ui-btn" onclick="initTilt()">🚗 Enable Tilt (Secure HTTPS Only)</button>
+                <select id="timeOfDay" onchange="setTimeOfDay(this.value)">
+                    <option value="day">Time: Day</option>
+                    <option value="night">Time: Night</option>
+                </select>
                 <select id="quality" onchange="changeQuality(this.value)">
-                    <option value="high">Graphics: High</option>
+                    <option value="high">Graphics: High (PBR)</option>
                     <option value="med">Graphics: Medium</option>
                     <option value="low">Graphics: Low</option>
                 </select>
@@ -78,151 +82,233 @@
     </div>
 
     <script>
-        // --- Scene & Camera Setup ---
+        // --- 1. Scene & Environment Setup ---
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x111118, 0.015); // Fog hides popping and adds realism
-        scene.background = new THREE.Color(0x111118);
-
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
-        camera.position.set(0, 6, 12);
-        camera.lookAt(0, 2, -20);
-
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
 
-        // --- Lighting ---
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 400);
+        camera.position.set(0, 5, 15);
+        camera.lookAt(0, 1, -100);
+
+        const daylightColor = new THREE.Color(0xa0c0e0);
+        const nightlightColor = new THREE.Color(0x050510);
+        
+        // --- Fog & Environment ---
+        const activeFog = new THREE.FogExp2(daylightColor, 0.015);
+        scene.fog = activeFog;
+        scene.background = daylightColor;
+
+        // Realistic Highway
+        const roadWidth = 22;
+        const roadGeo = new THREE.PlaneGeometry(roadWidth, 800);
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8, metalness: 0.1 });
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.rotation.x = -Math.PI / 2;
+        road.position.z = -150;
+        road.receiveShadow = true;
+        scene.add(road);
+
+        // Realistic 3D Terrain Slopes
+        function createTerrain() {
+            const terrainGeo = new THREE.PlaneGeometry(300, 800, 50, 50);
+            terrainGeo.rotateX(-Math.PI / 2);
+            
+            const position = terrainGeo.attributes.position;
+            const vertex = new THREE.Vector3();
+            
+            for (let i = 0; i < position.count; i++) {
+                vertex.fromBufferAttribute(position, i);
+                if (Math.abs(vertex.x) > roadWidth / 1.8) {
+                    // Create noise for slopes and distant hills
+                    const noise = Math.sin(vertex.x * 0.1) * Math.cos(vertex.z * 0.02) * 5;
+                    vertex.y = Math.abs(vertex.x * 0.1) + noise; 
+                    if (vertex.y < 0) vertex.y = 0;
+                } else {
+                    vertex.y = 0; // Keep road flat
+                }
+                position.setXYZ(i, vertex.x, vertex.y, vertex.z);
+            }
+            terrainGeo.computeVertexNormals();
+            return terrainGeo;
+        }
+        
+        const terrainMatDay = new THREE.MeshStandardMaterial({ color: 0x334411, roughness: 1.0 });
+        const terrainMatNight = new THREE.MeshStandardMaterial({ color: 0x010200, roughness: 1.0 });
+        const terrain = new THREE.Mesh(createTerrain(), terrainMatDay);
+        terrain.position.z = -150;
+        terrain.receiveShadow = true;
+        scene.add(terrain);
+
+        // Moving lane markings
+        const markings = [];
+        const markingGeo = new THREE.PlaneGeometry(0.3, 4);
+        const markingMat = new THREE.MeshBasicMaterial({ color: 0xffeeaa }); // Warmer marking color
+        for(let i=0; i<40; i++) {
+            const mark1 = new THREE.Mesh(markingGeo, markingMat);
+            mark1.rotation.x = -Math.PI / 2;
+            mark1.position.set(-3.5, 0.05, -i * 10);
+            scene.add(mark1); markings.push(mark1);
+
+            const mark2 = new THREE.Mesh(markingGeo, markingMat);
+            mark2.rotation.x = -Math.PI / 2;
+            mark2.position.set(3.5, 0.05, -i * 10);
+            scene.add(mark2); markings.push(mark2);
+        }
+
+        // --- 2. Real-Time Dynamic Lighting & Day/Night Logic ---
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
         scene.add(ambientLight);
 
         const sunLight = new THREE.DirectionalLight(0xffeedd, 1.2);
-        sunLight.position.set(20, 30, -10);
+        sunLight.position.set(50, 40, -10);
         sunLight.castShadow = true;
         sunLight.shadow.camera.near = 0.5;
-        sunLight.shadow.camera.far = 100;
-        sunLight.shadow.camera.left = -20;
-        sunLight.shadow.camera.right = 20;
-        sunLight.shadow.camera.top = 20;
-        sunLight.shadow.camera.bottom = -20;
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.far = 150;
+        sunLight.shadow.camera.left = -30; sunLight.shadow.camera.right = 30;
+        sunLight.shadow.camera.top = 30; sunLight.shadow.camera.bottom = -30;
+        sunLight.shadow.mapSize.width = 4096; sunLight.shadow.mapSize.height = 4096;
         scene.add(sunLight);
 
-        // --- Shared Geometries & Materials ---
-        const carGeo = new THREE.BoxGeometry(2.2, 1.2, 4.8);
-        const cabinGeo = new THREE.BoxGeometry(1.8, 0.8, 2.4);
-        const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.4, 16);
-        wheelGeo.rotateZ(Math.PI / 2);
-        
-        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-        const glassMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.1, metalness: 0.8 });
-        const taillightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Emissive look
+        let timeOfDay = 'day';
 
-        const roadMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-        const markingMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        const grassMat = new THREE.MeshStandardMaterial({ color: 0x1a331a, roughness: 1.0 });
-
-        // --- Environment (Highway) ---
-        const roadWidth = 24;
-        const road = new THREE.Mesh(new THREE.PlaneGeometry(roadWidth, 400), roadMat);
-        road.rotation.x = -Math.PI / 2;
-        road.position.z = -100;
-        road.receiveShadow = true;
-        scene.add(road);
-
-        const grassLeft = new THREE.Mesh(new THREE.PlaneGeometry(100, 400), grassMat);
-        grassLeft.rotation.x = -Math.PI / 2;
-        grassLeft.position.set(-62, -0.1, -100);
-        scene.add(grassLeft);
-
-        const grassRight = new THREE.Mesh(new THREE.PlaneGeometry(100, 400), grassMat);
-        grassRight.rotation.x = -Math.PI / 2;
-        grassRight.position.set(62, -0.1, -100);
-        scene.add(grassRight);
-
-        // Moving lane markings
-        const markings = [];
-        for(let i=0; i<20; i++) {
-            const mark1 = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 4), markingMat);
-            mark1.rotation.x = -Math.PI / 2;
-            mark1.position.set(-4, 0.05, -i * 10);
-            scene.add(mark1);
-            markings.push(mark1);
-
-            const mark2 = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 4), markingMat);
-            mark2.rotation.x = -Math.PI / 2;
-            mark2.position.set(4, 0.05, -i * 10);
-            scene.add(mark2);
-            markings.push(mark2);
+        function setTimeOfDay(time) {
+            timeOfDay = time;
+            document.getElementById('timeOfDay').value = time; // Ensure UI matches
+            
+            if (time === 'night') {
+                activeFog.color.set(nightlightColor);
+                scene.background.set(nightlightColor);
+                sunLight.color.set(0x050510); // Subtle moonlight
+                ambientLight.intensity = 0.1;
+                terrain.material = terrainMatNight;
+                markingMat.color.set(0xaa8866); // Duller markings at night
+                
+                player.headlights.visible = true;
+                trafficCars.forEach(car => car.headlights.visible = true);
+            } else {
+                activeFog.color.set(daylightColor);
+                scene.background.set(daylightColor);
+                sunLight.color.set(0xffeedd); 
+                ambientLight.intensity = 0.4;
+                terrain.material = terrainMatDay;
+                markingMat.color.set(0xffeeaa);
+                
+                player.headlights.visible = false;
+                trafficCars.forEach(car => car.headlights.visible = false);
+            }
         }
+        setTimeOfDay('day'); // Default Start
 
-        // --- Car Builder Function ---
-        function createCar(colorHex) {
+        // --- 3. Car Builder Function (Realistic Geometry) ---
+        function createRealisticCar(colorHex, isPlayer=false) {
             const carGroup = new THREE.Group();
-            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.6, roughness: 0.3 });
             
-            const body = new THREE.Mesh(carGeo, bodyMat);
-            body.position.y = 0.8;
-            body.castShadow = true;
-            body.receiveShadow = true;
-            carGroup.add(body);
+            // Materials
+            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.8, roughness: 0.15 });
+            const bodyLowerMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.5, roughness: 0.8 }); // Lower plastic
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.1, metalness: 0.9 });
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 1.0 });
+            const taillightMat = new THREE.MeshBasicMaterial({ color: 0xff1111 });
+            const headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-            const cabin = new THREE.Mesh(cabinGeo, glassMat);
-            cabin.position.set(0, 1.8, -0.4);
-            cabin.castShadow = true;
-            carGroup.add(cabin);
+            // Core Geometry dimensions
+            const L = 4.8; const W = 2.0; const H = 1.3;
+            const chassisGeo = new THREE.BoxGeometry(W, H/1.8, L);
+            const lowerBodyGeo = new THREE.BoxGeometry(W+0.1, H/4, L);
+            const glassGeo = new THREE.BoxGeometry(W-0.2, H, L/1.8);
+            const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.4, 24); wheelGeo.rotateZ(Math.PI / 2);
 
-            // Taillights
-            const tLightL = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.3), taillightMat);
-            tLightL.position.set(-0.7, 1.0, 2.41);
-            carGroup.add(tLightL);
+            // Structure
+            const lowerBody = new THREE.Mesh(lowerBodyGeo, bodyLowerMat);
+            lowerBody.position.y = (H/4)/2 + 0.1;
+            lowerBody.castShadow = true;
+            lowerBody.receiveShadow = true;
+            carGroup.add(lowerBody);
+
+            const chassis = new THREE.Mesh(chassisGeo, bodyMat);
+            chassis.position.y = H/1.8/2 + lowerBody.position.y + 0.1;
+            chassis.castShadow = true;
+            chassis.receiveShadow = true;
+            carGroup.add(chassis);
+
+            const greenhouse = new THREE.Mesh(glassGeo, glassMat);
+            greenhouse.position.set(0, H/2 + chassis.position.y, 0.2);
+            greenhouse.castShadow = true;
+            carGroup.add(greenhouse);
+
+            // Lighting Elements
+            carGroup.headlights = new THREE.Group(); // Parent for visibility toggle
             
-            const tLightR = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.3), taillightMat);
-            tLightR.position.set(0.7, 1.0, 2.41);
-            carGroup.add(tLightR);
+            const hlL = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.25), headlightMat);
+            hlL.position.set(-0.7, chassis.position.y - 0.1, -L/2 - 0.01);
+            carGroup.headlights.add(hlL);
+            
+            const hlR = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.25), headlightMat);
+            hlR.position.set(0.7, chassis.position.y - 0.1, -L/2 - 0.01);
+            carGroup.headlights.add(hlR);
+
+            // Actual Light sources for players (for ground illumination)
+            if (isPlayer) {
+                const playerHeadlightSourceL = new THREE.SpotLight(0xffffff, 1.5, 60, Math.PI / 8, 0.2);
+                playerHeadlightSourceL.position.set(-0.7, chassis.position.y, -L/2 - 0.1);
+                playerHeadlightSourceL.target.position.set(-0.7, 0, -50); // Direct forward
+                carGroup.headlights.add(playerHeadlightSourceL);
+                carGroup.headlights.add(playerHeadlightSourceL.target);
+
+                const playerHeadlightSourceR = new THREE.SpotLight(0xffffff, 1.5, 60, Math.PI / 8, 0.2);
+                playerHeadlightSourceR.position.set(0.7, chassis.position.y, -L/2 - 0.1);
+                playerHeadlightSourceR.target.position.set(0.7, 0, -50);
+                carGroup.headlights.add(playerHeadlightSourceR);
+                carGroup.headlights.add(playerHeadlightSourceR.target);
+            } else {
+                // Slower traffic has duller taillights
+                const tlL = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.2), taillightMat);
+                tlL.position.set(-0.65, chassis.position.y - 0.1, L/2 + 0.01);
+                carGroup.add(tlL);
+                
+                const tlR = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.2), taillightMat);
+                tlR.position.set(0.65, chassis.position.y - 0.1, L/2 + 0.01);
+                carGroup.add(tlR);
+            }
+            carGroup.headlights.visible = (timeOfDay === 'night');
+            carGroup.add(carGroup.headlights);
 
             // Wheels
-            const wheelPositions = [
-                [-1.2, 0.4, 1.6], [1.2, 0.4, 1.6], 
-                [-1.2, 0.4, -1.6], [1.2, 0.4, -1.6]
-            ];
+            const wheelPositions = [[-W/2 - 0.05, 0.4, L/2 - 0.8], [W/2 + 0.05, 0.4, L/2 - 0.8], [-W/2 - 0.05, 0.4, -L/2 + 0.8], [W/2 + 0.05, 0.4, -L/2 + 0.8]];
             wheelPositions.forEach(pos => {
-                const w = new THREE.Mesh(wheelGeo, wheelMat);
-                w.position.set(...pos);
-                w.castShadow = true;
-                carGroup.add(w);
+                const w = new THREE.Mesh(wheelGeo, wheelMat); w.position.set(...pos); w.castShadow = true; carGroup.add(w);
             });
 
-            // Hitbox for precise collisions
-            carGroup.hitBox = new THREE.Box3();
+            carGroup.hitBox = new THREE.Box3(); // Precise Hitbox
             return carGroup;
         }
 
-        // --- Player Setup ---
-        const player = createCar(0x00ffcc); // Cyan sports car
+        // --- Player Car ---
+        const player = createRealisticCar(0xcc2222, true); // Deep Red Sports Car
         scene.add(player);
 
-        // --- Game State Variables ---
+        // --- 4. Game Logic Variables ---
         let trafficCars = [];
-        const trafficColors = [0xffffff, 0xcc0000, 0x3344ff, 0xffaa00, 0x222222, 0x888888];
-        let gameSpeed = 1.0; // Forward speed (units per frame)
-        let playerSpeedX = 0.4; // Strafe speed
+        const trafficColors = [0xeeeeee, 0x111111, 0x4455aa, 0xffaa00, 0x228811];
+        let gameSpeed = 1.0; 
+        let playerSpeedX = 0.5;
         let score = 0;
         let distanceTraveled = 0;
         let isGameOver = false;
 
-        // Steering
-        let moveLeft = false;
-        let moveRight = false;
-        let tiltX = 0;
-        let useTilt = false;
+        // Steering Controls
+        let moveLeft = false, moveRight = false;
+        let tiltX = 0, useTilt = false;
 
-        // --- Controls ---
+        // --- 5. Inputs & Handling ---
         window.addEventListener('keydown', (e) => {
             if(e.key === 'ArrowLeft' || e.key === 'a') moveLeft = true;
             if(e.key === 'ArrowRight' || e.key === 'd') moveRight = true;
+            if(e.key === 'Enter') setTimeOfDay(timeOfDay === 'day' ? 'night' : 'day'); // Day/Night toggle
         });
         window.addEventListener('keyup', (e) => {
             if(e.key === 'ArrowLeft' || e.key === 'a') moveLeft = false;
@@ -231,22 +317,11 @@
 
         function initTilt() {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().then(state => {
-                    if (state === 'granted') activateTiltListener();
-                }).catch(console.error);
+                DeviceOrientationEvent.requestPermission().then(state => { if (state === 'granted') activateTiltListener(); }).catch(console.error);
             } else { activateTiltListener(); }
         }
+        function activateTiltListener() { useTilt = true; document.getElementById('tilt-btn').innerText = "✅ Tilt Active"; document.getElementById('tilt-btn').style.background = "#00cc66"; window.addEventListener('deviceorientation', (e) => { if (e.gamma !== null) tiltX = e.gamma; }); }
 
-        function activateTiltListener() {
-            useTilt = true;
-            document.getElementById('tilt-btn').innerText = "✅ Tilt Active";
-            document.getElementById('tilt-btn').style.background = "#00cc66";
-            window.addEventListener('deviceorientation', (e) => {
-                if (e.gamma !== null) tiltX = e.gamma; 
-            });
-        }
-
-        // --- Graphics Settings ---
         function changeQuality(level) {
             let pr = window.devicePixelRatio;
             if (level === 'med') pr = window.devicePixelRatio * 0.75;
@@ -258,117 +333,61 @@
         // --- Traffic Spawner ---
         function spawnTraffic() {
             if(isGameOver) return;
-            
-            const color = trafficColors[Math.floor(Math.random() * trafficColors.length)];
-            const tCar = createCar(color);
-            
-            // Random lane position within road bounds
+            const tCar = createRealisticCar(trafficColors[Math.floor(Math.random() * trafficColors.length)]);
             const spawnX = (Math.random() * (roadWidth - 4)) - ((roadWidth - 4) / 2);
-            tCar.position.set(spawnX, 0, -150);
-            
-            // Speed of the traffic car (slower than player)
-            tCar.speed = (Math.random() * 0.4) + 0.3; 
-            
-            scene.add(tCar);
-            trafficCars.push(tCar);
-            
-            const spawnRate = Math.max(300, 1500 - (gameSpeed * 500)); // Gets harder over time
-            setTimeout(spawnTraffic, spawnRate + Math.random() * 500);
+            tCar.position.set(spawnX, 0, -250);
+            tCar.speed = (Math.random() * 0.3) + 0.2; // Slower than player
+            tCar.headlights.visible = (timeOfDay === 'night');
+            scene.add(tCar); trafficCars.push(tCar);
+            const spawnRate = Math.max(250, 1500 - (gameSpeed * 600)); 
+            setTimeout(spawnTraffic, spawnRate + Math.random() * 800);
         }
         spawnTraffic();
 
-        // --- Main Game Loop ---
+        // --- 6. Main Game Loop ---
         function animate() {
             requestAnimationFrame(animate);
             if (isGameOver) return;
 
-            // Update Score & UI
+            // Update UI/Score
             distanceTraveled += gameSpeed;
-            if(distanceTraveled > 10) {
-                score++;
-                distanceTraveled = 0;
-                gameSpeed += 0.001; // Accelerate over time
-                document.getElementById('score-display').innerText = "Score: " + score;
-                document.getElementById('speed-display').innerText = Math.floor(120 + (gameSpeed * 50)) + " km/h";
-            }
+            if(distanceTraveled > 10) { score++; distanceTraveled = 0; gameSpeed += 0.001; document.getElementById('score-display').innerText = "Score: " + score; document.getElementById('speed-display').innerText = Math.floor(120 + (gameSpeed * 50)) + " km/h"; }
 
             // Player Steering
-            if (useTilt) {
-                if (Math.abs(tiltX) > 3) {
-                    const tiltIntensity = Math.min(Math.max(tiltX / 30, -1), 1);
-                    player.position.x += tiltIntensity * playerSpeedX;
-                }
-            } else {
-                if (moveLeft) player.position.x -= playerSpeedX;
-                if (moveRight) player.position.x += playerSpeedX;
-            }
-
-            // Clamp player to road
-            const maxSteer = (roadWidth / 2) - 1.5;
+            if (useTilt) { if (Math.abs(tiltX) > 3) { const intensity = Math.min(Math.max(tiltX / 25, -1), 1); player.position.x += intensity * playerSpeedX; }
+            } else { if (moveLeft) player.position.x -= playerSpeedX; if (moveRight) player.position.x += playerSpeedX; }
+            const maxSteer = (roadWidth / 2) - 1.3;
             player.position.x = Math.min(Math.max(player.position.x, -maxSteer), maxSteer);
 
-            // Dynamic Camera follow
-            camera.position.x = player.position.x * 0.5;
+            // Dynamic Camera & Lighting positions
+            camera.position.x = player.position.x * 0.3;
+            sunLight.position.x = player.position.x + 50; sunLight.position.z = player.position.z - 10;
+            terrain.position.x = player.position.x; // Static road illusion
 
-            // Animate Lane Markings (illusion of speed)
-            markings.forEach(m => {
-                m.position.z += gameSpeed;
-                if(m.position.z > 10) m.position.z -= 200;
-            });
-
-            // Update Player Bounding Box
-            player.hitBox.setFromObject(player);
+            // Lane Marking Animation
+            markings.forEach(m => { m.position.z += gameSpeed; if(m.position.z > 20) m.position.z -= 400; });
 
             // Traffic Update & Collision
+            player.hitBox.setFromObject(player); // Update Player Hitbox
+            
             for (let i = trafficCars.length - 1; i >= 0; i--) {
                 let tCar = trafficCars[i];
-                
-                // Move traffic towards player (Relative speed: gameSpeed - tCar.speed)
-                tCar.position.z += (gameSpeed - tCar.speed);
+                tCar.position.z += (gameSpeed - tCar.speed); // Move relative
                 tCar.hitBox.setFromObject(tCar);
 
-                // Check collision using Bounding Boxes
-                if (player.hitBox.intersectsBox(tCar.hitBox)) {
-                    gameOver();
-                }
+                if (player.hitBox.intersectsBox(tCar.hitBox)) { gameOver(); } // Crash detection
 
-                // Remove passed cars
-                if (tCar.position.z > 20) {
-                    scene.remove(tCar);
-                    trafficCars.splice(i, 1);
-                }
+                if (tCar.position.z > 20) { scene.remove(tCar); trafficCars.splice(i, 1); } // GC
             }
 
             renderer.render(scene, camera);
         }
 
-        function gameOver() {
-            isGameOver = true;
-            document.getElementById('game-over').style.display = 'block';
-            document.getElementById('final-score').innerText = "Final Score: " + score;
-        }
+        function gameOver() { isGameOver = true; document.getElementById('game-over').style.display = 'block'; document.getElementById('final-score').innerText = "Final Score: " + score; }
 
-        function resetGame() {
-            trafficCars.forEach(t => scene.remove(t));
-            trafficCars = [];
-            score = 0;
-            distanceTraveled = 0;
-            gameSpeed = 1.0;
-            player.position.x = 0;
-            isGameOver = false;
-            
-            document.getElementById('score-display').innerText = "Score: 0";
-            document.getElementById('speed-display').innerText = "120 km/h";
-            document.getElementById('game-over').style.display = 'none';
-            
-            spawnTraffic();
-        }
+        function resetGame() { trafficCars.forEach(t => scene.remove(t)); trafficCars = []; score = 0; distanceTraveled = 0; gameSpeed = 1.0; player.position.x = 0; isGameOver = false; document.getElementById('score-display').innerText = "Score: 0"; document.getElementById('speed-display').innerText = "120 km/h"; document.getElementById('game-over').style.display = 'none'; spawnTraffic(); }
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 
         animate();
     </script>
