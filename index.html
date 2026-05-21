@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>High-Fidelity 3D Dodger</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; /* Prevents zooming and scrolling on mobile */
+        }
+        canvas {
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        #top-bar {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            pointer-events: auto;
+        }
+        #score {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        select {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        #game-over {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            pointer-events: auto;
+            border: 1px solid #333;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover { background: #0056b3; }
+        
+        /* Mobile Controls */
+        #mobile-controls {
+            display: flex;
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0; left: 0;
+            pointer-events: auto;
+            z-index: -1; /* Keep behind UI but clickable */
+        }
+        .touch-zone {
+            flex: 1;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <div id="ui-layer">
+        <div id="top-bar">
+            <div id="score">Score: 0</div>
+            <div>
+                <label for="quality">Graphics: </label>
+                <select id="quality" onchange="changeQuality(this.value)">
+                    <option value="high">High (Realistic)</option>
+                    <option value="med">Medium</option>
+                    <option value="low">Low (Performance)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div id="mobile-controls">
+        <div class="touch-zone" id="touch-left"></div>
+        <div class="touch-zone" id="touch-right"></div>
+    </div>
+
+    <div id="game-over">
+        <h1 style="margin-top:0; color:#ff4444;">GAME OVER</h1>
+        <h2 id="final-score">Score: 0</h2>
+        <button onclick="resetGame()">Tap to Restart</button>
+    </div>
+
+    <script>
+        // --- Game Setup & Three.js Init ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0a0a1a, 0.04);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 4, 10);
+        camera.lookAt(0, 0, -5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer, more realistic shadows
+        document.body.appendChild(renderer.domElement);
+
+        // --- Lighting (For Realism) ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048; // High res shadows
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        // --- Materials (Physically Based Rendering) ---
+        // Player material (Chrome/Metal)
+        const playerMat = new THREE.MeshStandardMaterial({
+            color: 0x00aaff,
+            metalness: 0.9,
+            roughness: 0.1
+        });
+
+        // Obstacle material (Matte dark)
+        const obstacleMat = new THREE.MeshStandardMaterial({
+            color: 0xff3333,
+            metalness: 0.2,
+            roughness: 0.8
+        });
+
+        // Ground material (Glossy dark)
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x111111,
+            metalness: 0.5,
+            roughness: 0.2
+        });
+
+        // --- Objects ---
+        const player = new THREE.Mesh(new THREE.SphereGeometry(0.8, 32, 32), playerMat);
+        player.position.y = 0.8;
+        player.castShadow = true;
+        scene.add(player);
+
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 200), groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // --- Game Logic Variables ---
+        let obstacles = [];
+        let gameSpeed = 0.3;
+        let score = 0;
+        let isGameOver = false;
+        let playerVelocityX = 0;
+        const playerSpeed = 0.2;
+
+        // --- Input Handling ---
+        let moveLeft = false;
+        let moveRight = false;
+
+        // Keyboard
+        window.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowLeft' || e.key === 'a') moveLeft = true;
+            if(e.key === 'ArrowRight' || e.key === 'd') moveRight = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if(e.key === 'ArrowLeft' || e.key === 'a') moveLeft = false;
+            if(e.key === 'ArrowRight' || e.key === 'd') moveRight = false;
+        });
+
+        // Mobile Touch Controls
+        const touchLeftZone = document.getElementById('touch-left');
+        const touchRightZone = document.getElementById('touch-right');
+
+        touchLeftZone.addEventListener('touchstart', (e) => { e.preventDefault(); moveLeft = true; });
+        touchLeftZone.addEventListener('touchend', (e) => { e.preventDefault(); moveLeft = false; });
+        
+        touchRightZone.addEventListener('touchstart', (e) => { e.preventDefault(); moveRight = true; });
+        touchRightZone.addEventListener('touchend', (e) => { e.preventDefault(); moveRight = false; });
+
+        // --- Graphics Settings Logic ---
+        function changeQuality(level) {
+            let pixelRatio = window.devicePixelRatio;
+            if (level === 'med') pixelRatio = window.devicePixelRatio * 0.75;
+            if (level === 'low') pixelRatio = window.devicePixelRatio * 0.5;
+            
+            renderer.setPixelRatio(pixelRatio);
+            
+            if (level === 'low') {
+                renderer.shadowMap.enabled = false;
+                dirLight.castShadow = false;
+            } else {
+                renderer.shadowMap.enabled = true;
+                dirLight.castShadow = true;
+            }
+            
+            // Force materials to update
+            scene.traverse(function(child) {
+                if (child.material) child.material.needsUpdate = true;
+            });
+        }
+        
+        // Initialize default high quality
+        changeQuality('high');
+
+        // --- Spawning Obstacles ---
+        function spawnObstacle() {
+            if(isGameOver) return;
+            const size = 1 + Math.random() * 1.5;
+            const obs = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), obstacleMat);
+            
+            // Random position across the track
+            const startX = (Math.random() - 0.5) * 15;
+            obs.position.set(startX, size/2, -50);
+            obs.castShadow = true;
+            obs.receiveShadow = true;
+            
+            scene.add(obs);
+            obstacles.push(obs);
+            
+            setTimeout(spawnObstacle, 1000 - (gameSpeed * 100)); // Spawn faster as game speeds up
+        }
+        spawnObstacle();
+
+        // --- Main Game Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isGameOver) return;
+
+            // Player Movement
+            if (moveLeft && player.position.x > -8) player.position.x -= playerSpeed;
+            if (moveRight && player.position.x < 8) player.position.x += playerSpeed;
+
+            // Spin the player ball for effect
+            player.rotation.x -= gameSpeed;
+
+            // Move Obstacles and Check Collision
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.position.z += gameSpeed;
+
+                // Simple Box/Sphere Collision Detection
+                const distanceX = Math.abs(player.position.x - obs.position.x);
+                const distanceZ = Math.abs(player.position.z - obs.position.z);
+                
+                // Approximate collision radius based on block size
+                const collisionThreshold = (obs.geometry.parameters.width / 2) + 0.6; 
+
+                if (distanceX < collisionThreshold && distanceZ < collisionThreshold) {
+                    gameOver();
+                }
+
+                // Remove objects that passed the camera
+                if (obs.position.z > 15) {
+                    scene.remove(obs);
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    document.getElementById('score').innerText = "Score: " + score;
+                    gameSpeed += 0.005; // Slowly increase difficulty
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            document.getElementById('game-over').style.display = 'block';
+            document.getElementById('final-score').innerText = "Final Score: " + score;
+            document.getElementById('mobile-controls').style.zIndex = "-2"; // Disable touch zones
+        }
+
+        function resetGame() {
+            // Clean up old obstacles
+            obstacles.forEach(obs => scene.remove(obs));
+            obstacles = [];
+            
+            // Reset variables
+            score = 0;
+            gameSpeed = 0.3;
+            player.position.x = 0;
+            isGameOver = false;
+            
+            // Update UI
+            document.getElementById('score').innerText = "Score: 0";
+            document.getElementById('game-over').style.display = 'none';
+            document.getElementById('mobile-controls').style.zIndex = "-1"; // Re-enable touch zones
+            
+            spawnObstacle();
+        }
+
+        // Handle Window Resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start Loop
+        animate();
+    </script>
+</body>
+</html>
