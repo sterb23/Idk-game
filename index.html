@@ -3,457 +3,392 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Realistic Highway Drive</title>
+    <title>Budget Commando: Polygon Outbreak</title>
     <style>
         body, html {
             margin: 0; padding: 0; overflow: hidden;
-            background-color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            touch-action: none; color: white;
+            background-color: #050505; font-family: 'Courier New', Courier, monospace;
+            touch-action: none; user-select: none; color: #00ff00;
         }
         canvas { display: block; }
-        #ui-layer {
+        
+        /* UI Layer */
+        #ui-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; display: flex; flex-direction: column;
+            pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
         }
-        #top-bar {
-            padding: 20px; display: flex; justify-content: space-between; align-items: flex-start;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.8); pointer-events: auto;
+        #hud {
+            padding: 20px; display: flex; justify-content: space-between; align-items: center;
+            pointer-events: auto; background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 100%);
         }
-        #score-display { font-size: 28px; font-weight: bold; margin-bottom: 10px; }
-        #speed-display { font-size: 18px; color: #00ffaa; font-weight: bold; }
-        .controls-container { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
-        select, .ui-btn {
-            background: rgba(0, 0, 0, 0.7); color: white; border: 1px solid #555;
-            padding: 10px 15px; border-radius: 5px; font-size: 16px; cursor: pointer;
-            backdrop-filter: blur(4px); transition: all 0.3s ease;
+        #stats { font-size: 24px; font-weight: bold; text-shadow: 0 0 5px #00ff00; }
+        
+        select, .btn {
+            background: #000; color: #00ff00; border: 2px solid #00ff00;
+            padding: 8px 12px; font-family: inherit; font-size: 14px; cursor: pointer;
         }
-        .ui-btn:hover { background: #333; }
-        #game-over {
+        .btn:active { background: #00ff00; color: #000; }
+
+        /* Mobile Layout */
+        #mobile-controls {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            padding: 30px; pointer-events: auto; gap: 20px;
+        }
+        .move-btns { display: flex; gap: 15px; }
+        .touch-btn {
+            width: 70px; height: 70px; font-size: 24px; font-weight: bold;
+            display: flex; align-items: center; justify-content: center; border-radius: 10px;
+        }
+        #fire-btn {
+            width: 100px; height: 100px; background: #ff0055; color: #fff; border-color: #ff0055;
+            font-size: 20px; border-radius: 50%; text-shadow: 0 0 5px #fff;
+        }
+        #fire-btn:active { background: #fff; color: #ff0055; }
+
+        /* Game Screens */
+        .screen {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9); padding: 50px;
-            border-radius: 12px; text-align: center; display: none;
-            pointer-events: auto; border: 1px solid #444; z-index: 10;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            background: rgba(0, 0, 0, 0.9); border: 3px solid #00ff00; padding: 40px;
+            text-align: center; pointer-events: auto; z-index: 100; box-shadow: 0 0 20px #00ff00;
         }
-        #game-over h1 { margin-top: 0; color: #ff3333; font-size: 40px; }
-        #game-over button {
-            margin-top: 20px; padding: 15px 30px; font-size: 18px;
-            background: #00ffaa; color: black; font-weight: bold; border: none;
-            border-radius: 5px; cursor: pointer; transition: transform 0.2s;
+        .screen h1 { margin-top: 0; font-size: 32px; letter-spacing: 2px; }
+        .screen button {
+            margin-top: 20px; padding: 12px 24px; font-size: 18px; font-weight: bold;
         }
-        #game-over button:hover { transform: scale(1.05); }
     </style>
 </head>
 <body>
 
-    <script type="module">
-        import * as THREE from 'https://unpkg.com/three@0.128.0/build/three.module.js';
-        import { EffectComposer } from 'https://unpkg.com/three@0.128.0/examples/jsm/postprocessing/EffectComposer.js';
-        import { RenderPass } from 'https://unpkg.com/three@0.128.0/examples/jsm/postprocessing/RenderPass.js';
-        import { UnrealBloomPass } from 'https://unpkg.com/three@0.128.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-        // --- Core Setup ---
-        let scene, camera, renderer, composer, bloomPass;
-        let isDay = true;
-        
-        // Define day and night parameters
-        const dayParams = {
-            sky: 0x88ccff, fog: 0xccccff, sun: 0xffeedd, ambient: 0.3, directional: 1.5, bloom: 0.2
-        };
-        const nightParams = {
-            sky: 0x010203, fog: 0x010203, sun: 0x223388, ambient: 0.05, directional: 0.1, bloom: 0.8
-        };
+    <div id="ui-container">
+        <div id="hud">
+            <div id="stats">SCORE: 0000 | AMMO: 30</div>
+            <select id="quality" onchange="changeQuality(this.value)">
+                <option value="high">Graphics: Fancy Potato</option>
+                <option value="low">Graphics: Literal Potato</option>
+            </select>
+        </div>
 
-        // --- Object Holders ---
-        let road, markings = [], barriers = [], streetLamps = [];
-        let trafficCars = [];
-        let player;
+        <div id="mobile-controls">
+            <div class="move-btns">
+                <div class="btn touch-btn" id="left-btn">◀</div>
+                <div class="btn touch-btn" id="right-btn">▶</div>
+            </div>
+            <div class="btn touch-btn" id="fire-btn">FIRE</div>
+        </div>
+    </div>
 
-        // --- Shared Geometries & Materials (Pre-generated for performance) ---
-        let carBaseMat, cabinMat, wheelMat, wheelRimMat;
-        let roadMat, markingMat, concreteMat, lampPostMat, lampMat;
-        let headlightMat, taillightMat;
+    <div id="start-screen" class="screen">
+        <h1>BUDGET COMMANDO</h1>
+        <p>Defend the low-poly grid from invading shapes.</p>
+        <button class="btn" onclick="startGame()">START GAME</button>
+    </div>
 
-        function initGeometriesAndMaterials() {
-            carBaseMat = new THREE.MeshStandardMaterial({ roughness: 0.2, metalness: 0.8 });
-            cabinMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.1, metalness: 0.9 });
-            wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-            wheelRimMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.4, metalness: 0.9 });
+    <div id="game-over" class="screen" style="display: none;">
+        <h1 style="color: #ff0055; text-shadow: 0 0 5px #ff0055;">MISSION FAILED</h1>
+        <h3 id="final-score">SCORE: 0</h3>
+        <button class="btn" onclick="resetGame()">RETRY</button>
+    </div>
 
-            roadMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
-            markingMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            concreteMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.8 });
-            lampPostMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 });
-            lampMat = new THREE.MeshStandardMaterial({ color: 0xcccc66, roughness: 0.2, metalness: 0.8 });
-
-            headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffcc });
-            taillightMat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+    <script>
+        // --- Low-Budget Synthetic Sound Generator (Web Audio API) ---
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        // --- Environment Builder ---
-        function createRoad() {
-            const roadWidth = 24;
-            const roadLength = 400;
-            road = new THREE.Mesh(new THREE.PlaneGeometry(roadWidth, roadLength), roadMat);
-            road.rotation.x = -Math.PI / 2;
-            road.position.z = -100;
-            road.receiveShadow = true;
-            scene.add(road);
+        function playSound(type) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
 
-            // Barriers
-            const barrierGeo = new THREE.BoxGeometry(0.5, 1.2, roadLength);
-            for (let i = 0; i < 2; i++) {
-                const b = new THREE.Mesh(barrierGeo, concreteMat);
-                b.position.set((roadWidth / 2 + 0.25) * (i === 0 ? 1 : -1), 0.6, -100);
-                b.receiveShadow = true;
-                b.castShadow = true;
-                scene.add(b);
-                barriers.push(b);
+            if (type === 'pew') { // Laser Sound
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'boom') { // Explosion
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(10, audioCtx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'click') { // Empty Gun Click
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.05);
             }
+        }
 
-            // Lane markings
-            for (let i = 0; i < 40; i++) {
-                for (let j = 0; j < 2; j++) {
-                    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 4), markingMat);
-                    m.rotation.x = -Math.PI / 2;
-                    m.position.set(4 * (j === 0 ? 1 : -1), 0.05, -i * 10);
-                    scene.add(m);
-                    markings.push(m);
+        // --- Three.js Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x020205);
+        scene.fog = new THREE.FogExp2(0x020205, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 150);
+        camera.position.set(0, 2, 0); // Player starting viewpoint
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0x112211, 1.0);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0x00ff00, 1.0);
+        dirLight.position.set(5, 20, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // --- Environment Floor (Retro Wireframe Grid) ---
+        const gridHelper = new THREE.GridHelper(100, 40, 0x00ff00, 0x004400);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(100, 100),
+            new THREE.MeshStandardMaterial({ color: 0x050a05, roughness: 0.9 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- Player Blaster (Low-poly Gun model attached to camera) ---
+        const gunGroup = new THREE.Group();
+        const gunBody = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 0.3, 1.2),
+            new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7, roughness: 0.2 })
+        );
+        gunBody.position.set(0.5, -0.4, -1.0); // Offset to bottom right of screen
+        gunBody.castShadow = true;
+        gunGroup.add(gunBody);
+
+        const gunBarrel = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.06, 0.4),
+            new THREE.MeshStandardMaterial({ color: 0x111111 })
+        );
+        gunBarrel.rotateX(Math.PI / 2);
+        gunBarrel.position.set(0.5, -0.35, -1.6);
+        gunGroup.add(gunBarrel);
+
+        camera.add(gunGroup);
+        scene.add(camera); // Adding camera to scene reveals its children (the gun)
+
+        // --- Game System Variables ---
+        let enemies = [];
+        let bullets = [];
+        let score = 0;
+        let ammo = 30;
+        let isPlaying = false;
+        let isGameOver = false;
+        let gameSpeed = 0.15;
+        let reloadTimer = 0;
+
+        // Input Arrays
+        let moveLeft = false;
+        let moveRight = false;
+
+        // --- Game Logic Handling ---
+        function startGame() {
+            initAudio();
+            isPlaying = true;
+            document.getElementById('start-screen').style.display = 'none';
+        }
+
+        function fireWeapon() {
+            if (!isPlaying || isGameOver) return;
+            if (ammo <= 0) {
+                playSound('click');
+                // Auto-reload mechanical delay
+                if(reloadTimer === 0) {
+                    reloadTimer = setTimeout(() => {
+                        ammo = 30;
+                        updateHUD();
+                        reloadTimer = 0;
+                    }, 1500);
                 }
+                return;
             }
 
-            // Street Lamps
-            for (let i = 0; i < 15; i++) {
-                streetLamps.push(createStreetLamp((roadWidth / 2 + 1), -i * 25));
-            }
+            ammo--;
+            updateHUD();
+            playSound('pew');
+
+            // Recoil animation effect
+            gunGroup.position.z += 0.2;
+
+            // Spawn Projectile
+            const b = new THREE.Mesh(
+                new THREE.SphereGeometry(0.15, 8, 8),
+                new THREE.MeshBasicMaterial({ color: 0xffff00 })
+            );
+            b.position.set(camera.position.x + 0.5, camera.position.y - 0.35, camera.position.z - 1.6);
+            scene.add(b);
+            bullets.push(b);
         }
 
-        function createStreetLamp(x, z) {
-            const lampGroup = new THREE.Group();
-            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 8), lampPostMat);
-            pole.position.y = 4;
-            lampGroup.add(pole);
-            
-            const lampHead = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.4, 0.6), lampPostMat);
-            lampHead.position.set(-0.6, 8, 0);
-            lampHead.rotation.z = Math.PI / 4;
-            lampGroup.add(lampHead);
+        function spawnEnemy() {
+            if (!isPlaying || isGameOver) return;
 
-            const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 0.4), lampMat);
-            lamp.position.set(-0.6, 7.9, 0);
-            lamp.rotation.z = Math.PI / 4;
-            lampGroup.add(lamp);
-
-            // Real light (point light)
-            const light = new THREE.PointLight(0xffffcc, 1.5, 30);
-            light.position.set(-1.2, 7.5, 0);
-            light.visible = !isDay;
-            lampGroup.add(light);
-            lampGroup.light = light;
-
-            lampGroup.position.set(x, 0, z);
-            scene.add(lampGroup);
-            return lampGroup;
-        }
-
-        // --- Realistic Car Builder ---
-        function createCar(isPlayer, colorHex) {
-            const carGroup = new THREE.Group();
-            const bodyMat = carBaseMat.clone();
-            bodyMat.color.setHex(colorHex);
-
-            // 1. Chassis/Base
-            const baseGeo = new THREE.BoxGeometry(2.0, 0.6, 4.6);
-            const base = new THREE.Mesh(baseGeo, bodyMat);
-            base.position.y = 0.6;
-            base.castShadow = true;
-            base.receiveShadow = true;
-            carGroup.add(base);
-
-            // 2. Main body / upper shell
-            const upperGeo = new THREE.BoxGeometry(1.8, 0.8, 4.2);
-            const upper = new THREE.Mesh(upperGeo, bodyMat);
-            upper.position.y = 1.0;
-            upper.castShadow = true;
-            carGroup.add(upper);
-
-            // 3. Cabin (Windshield & Windows)
-            const cabinGeo = new THREE.BoxGeometry(1.6, 0.8, 2.0);
-            const cabin = new THREE.Mesh(cabinGeo, cabinMat);
-            cabin.position.set(0, 1.7, -0.2);
-            cabin.castShadow = true;
-            carGroup.add(cabin);
-
-            // 4. Lights
-            carGroup.lights = [];
-            // Headlights
-            const headLampGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16);
-            headLampGeo.rotateX(Math.PI / 2);
-            const headlightL = new THREE.Mesh(headLampGeo, headlightMat);
-            headlightL.position.set(-0.7, 0.9, -2.31);
-            carGroup.add(headlightL);
-            const headlightR = headlightL.clone();
-            headlightR.position.x *= -1;
-            carGroup.add(headlightR);
-            // Real headlight (for player)
-            if (isPlayer) {
-                const spotlight = new THREE.SpotLight(0xffffcc, 2.0, 60, Math.PI / 6, 0.2);
-                spotlight.position.set(0, 1, -2.31);
-                spotlight.target.position.set(0, 1, -30);
-                spotlight.visible = !isDay;
-                carGroup.add(spotlight);
-                carGroup.add(spotlight.target);
-                carGroup.headlight = spotlight;
-            }
-            // Taillights
-            const taillightL = new THREE.Mesh(headLampGeo, taillightMat);
-            taillightL.position.set(-0.7, 0.9, 2.31);
-            carGroup.add(taillightL);
-            const taillightR = taillightL.clone();
-            taillightR.position.x *= -1;
-            carGroup.add(taillightR);
-
-            // 5. Wheels
-            const tireGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.4, 32);
-            tireGeo.rotateZ(Math.PI / 2);
-            const rimGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.41, 16);
-            rimGeo.rotateZ(Math.PI / 2);
-            const wheelPositions = [
-                [-1.1, 0.4, 1.4], [1.1, 0.4, 1.4], 
-                [-1.1, 0.4, -1.4], [1.1, 0.4, -1.4]
+            // Simple low-budget shapes (Cubes, Pyramids, Cylinders)
+            const shapes = [
+                new THREE.BoxGeometry(1.5, 1.5, 1.5),
+                new THREE.ConeGeometry(1, 2, 4),
+                new THREE.CylinderGeometry(0.8, 0.8, 1.8, 6)
             ];
-            wheelPositions.forEach(pos => {
-                const wGroup = new THREE.Group();
-                const tire = new THREE.Mesh(tireGeo, wheelMat);
-                tire.castShadow = true;
-                wGroup.add(tire);
-                const rim = new THREE.Mesh(rimGeo, wheelRimMat);
-                wGroup.add(rim);
-                wGroup.position.set(...pos);
-                carGroup.add(wGroup);
-            });
-
-            carGroup.hitBox = new THREE.Box3();
-            return carGroup;
-        }
-
-        // --- Core Setup & Initialization ---
-        let sunLight, ambientLight;
-        let gameSpeed = 1.0, score = 0, distanceTraveled = 0, isGameOver = false;
-        let moveLeft = false, moveRight = false, tiltX = 0, useTilt = false;
-
-        function init() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(dayParams.sky);
-            scene.fog = new THREE.FogExp2(dayParams.fog, 0.01);
-
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 300);
-            camera.position.set(0, 6, 12);
-            camera.lookAt(0, 2, -20);
-
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            document.body.appendChild(renderer.domElement);
-
-            initGeometriesAndMaterials();
-            createRoad();
             
-            player = createCar(true, 0x00ffcc);
-            scene.add(player);
+            const randomGeo = shapes[Math.floor(Math.random() * shapes.length)];
+            const enemyMat = new THREE.MeshStandardMaterial({ 
+                color: Math.random() > 0.5 ? 0xff0055 : 0xffaa00, 
+                flatShading: true 
+            });
 
-            // Lighting
-            ambientLight = new THREE.AmbientLight(0xffffff, dayParams.ambient);
-            scene.add(ambientLight);
-            sunLight = new THREE.DirectionalLight(dayParams.sun, dayParams.directional);
-            sunLight.position.set(20, 30, -10);
-            sunLight.castShadow = true;
-            sunLight.shadow.mapSize.width = 2048; // High-res shadows
-            sunLight.shadow.mapSize.height = 2048;
-            scene.add(sunLight);
-
-            // --- Post Processing ---
-            composer = new EffectComposer(renderer);
-            composer.addPass(new RenderPass(scene, camera));
-            bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-            bloomPass.threshold = 0.5;
-            bloomPass.strength = dayParams.bloom;
-            composer.addPass(bloomPass);
-
-            // Setup Controls
-            initControls();
+            const enemy = new THREE.Mesh(randomGeo, enemyMat);
+            enemy.position.set((Math.random() - 0.5) * 30, 1, -60); // Random horizon span
+            enemy.castShadow = true;
             
-            animate();
-            spawnTraffic();
-        }
+            scene.add(enemy);
+            enemies.push(enemy);
 
-        // --- Game Controls ---
-        function initControls() {
-            window.addEventListener('keydown', (e) => {
-                if(e.key === 'ArrowLeft' || e.key === 'a') moveLeft = true;
-                if(e.key === 'ArrowRight' || e.key === 'd') moveRight = true;
-            });
-            window.addEventListener('keyup', (e) => {
-                if(e.key === 'ArrowLeft' || e.key === 'a') moveLeft = false;
-                if(e.key === 'ArrowRight' || e.key === 'd') moveRight = false;
-            });
-            window.toggleDayNight = () => {
-                isDay = !isDay;
-                const p = isDay ? dayParams : nightParams;
-                scene.background.setHex(p.sky);
-                scene.fog.color.setHex(p.fog);
-                sunLight.color.setHex(p.sun);
-                sunLight.intensity = p.directional;
-                ambientLight.intensity = p.ambient;
-                bloomPass.strength = p.bloom;
-                streetLamps.forEach(lamp => lamp.light.visible = !isDay);
-                player.headlight.visible = !isDay;
-                document.getElementById('day-night-btn').innerText = isDay ? '☀️ Day' : '🌙 Night';
-            };
-            window.initTilt = () => {
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission().then(state => {
-                        if (state === 'granted') activateTilt();
-                    }).catch(console.error);
-                } else { activateTilt(); }
-            };
-            window.changeQuality = (level) => {
-                let pr = window.devicePixelRatio;
-                if (level === 'med') pr *= 0.75;
-                if (level === 'low') pr *= 0.5;
-                renderer.setPixelRatio(pr);
-                sunLight.castShadow = (level !== 'low');
-                if (level === 'low') composer.removePass(bloomPass);
-                else if (!composer.passes.includes(bloomPass)) composer.addPass(bloomPass);
-            };
-            function activateTilt() {
-                useTilt = true;
-                document.getElementById('tilt-btn').innerText = "✅ Tilt Active";
-                window.addEventListener('deviceorientation', (e) => tiltX = e.gamma);
-            }
+            // Dynamic scaling spawn speed based on progression
+            setTimeout(spawnEnemy, Math.max(400, 2000 - (score * 5)));
         }
+        setTimeout(spawnEnemy, 2000);
 
-        // --- Traffic & Spawner ---
-        const trafficColors = [0xffffff, 0xcc0000, 0x3344ff, 0xffaa00, 0x222222];
-        function spawnTraffic() {
-            if(isGameOver) return;
-            const tCar = createCar(false, trafficColors[Math.floor(Math.random() * trafficColors.length)]);
-            const spawnX = (Math.random() * (24 - 4)) - 10;
-            tCar.position.set(spawnX, 0, -150);
-            tCar.speed = (Math.random() * 0.4) + 0.3; 
-            scene.add(tCar);
-            trafficCars.push(tCar);
-            const spawnRate = Math.max(300, 1500 - (gameSpeed * 500));
-            setTimeout(spawnTraffic, spawnRate + Math.random() * 500);
-        }
-
-        // --- Main Game Loop ---
+        // --- Main System Loop ---
         function animate() {
             requestAnimationFrame(animate);
-            if (isGameOver) return;
 
-            // Score & Difficulty
-            distanceTraveled += gameSpeed;
-            if(distanceTraveled > 10) {
-                score++;
-                distanceTraveled = 0;
-                gameSpeed += 0.001;
-                document.getElementById('score-display').innerText = "Score: " + score;
-                document.getElementById('speed-display').innerText = Math.floor(120 + (gameSpeed * 50)) + " km/h";
-            }
+            if (isPlaying && !isGameOver) {
+                // Return weapon from recoil slowly
+                gunGroup.position.z += (0 - gunGroup.position.z) * 0.1;
 
-            // Player movement
-            let playerSpeedX = 0.4;
-            if (useTilt && Math.abs(tiltX) > 3) {
-                player.position.x += Math.min(Math.max(tiltX / 30, -1), 1) * playerSpeedX;
-            } else {
-                if (moveLeft) player.position.x -= playerSpeedX;
-                if (moveRight) player.position.x += playerSpeedX;
-            }
-            player.position.x = Math.min(Math.max(player.position.x, -10.5), 10.5);
-            camera.position.x = player.position.x * 0.4; // Camera dynamic follow
-            player.hitBox.setFromObject(player);
+                // Handle Player Locomotion
+                if (moveLeft && camera.position.x > -18) camera.position.x -= 0.25;
+                if (moveRight && camera.position.x < 18) camera.position.x += 0.25;
 
-            // Environment animation
-            markings.forEach(m => {
-                m.position.z += gameSpeed;
-                if(m.position.z > 10) m.position.z -= 400;
-            });
-            streetLamps.forEach(lamp => {
-                lamp.position.z += gameSpeed;
-                if(lamp.position.z > 20) lamp.position.z -= 375;
-            });
+                // Update Projectiles
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    bullets[i].position.z -= 1.5; // High velocity forward
+                    
+                    // Out of bounds cleaning
+                    if (bullets[i].position.z < -70) {
+                        scene.remove(bullets[i]);
+                        bullets.splice(i, 1);
+                    }
+                }
 
-            // Traffic Update & Collision
-            for (let i = trafficCars.length - 1; i >= 0; i--) {
-                let tCar = trafficCars[i];
-                tCar.position.z += (gameSpeed - tCar.speed);
-                tCar.hitBox.setFromObject(tCar);
-                if (player.hitBox.intersectsBox(tCar.hitBox)) gameOver();
-                if (tCar.position.z > 20) {
-                    scene.remove(tCar);
-                    trafficCars.splice(i, 1);
+                // Update Invading Fleet
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    let enemy = enemies[i];
+                    enemy.position.z += gameSpeed;
+                    enemy.rotation.y += 0.02; // Rotate for dynamic feel
+
+                    // Check if enemies breach base defense lines
+                    if (enemy.position.z > 2) {
+                        triggerGameOver();
+                    }
+
+                    // Collision Detection (Simple Radius Check)
+                    for (let j = bullets.length - 1; j >= 0; j--) {
+                        let dist = enemy.position.distanceTo(bullets[j].position);
+                        if (dist < 1.5) { // Impact match
+                            playSound('boom');
+                            
+                            // Visual deletion processing
+                            scene.remove(enemy);
+                            enemies.splice(i, 1);
+                            scene.remove(bullets[j]);
+                            bullets.splice(j, 1);
+
+                            score += 100;
+                            gameSpeed += 0.002; // Game accelerates
+                            updateHUD();
+                            break;
+                        }
+                    }
                 }
             }
 
-            composer.render(); // Use composer for post-processing
+            renderer.render(scene, camera);
         }
 
-        function gameOver() {
+        // --- UI & Controls Plumbing ---
+        function updateHUD() {
+            document.getElementById('stats').innerText = 
+                `SCORE: ${String(score).padStart(4, '0')} | AMMO: ${reloadTimer ? 'RELOADING' : ammo}`;
+        }
+
+        function triggerGameOver() {
             isGameOver = true;
             document.getElementById('game-over').style.display = 'block';
-            document.getElementById('final-score').innerText = "Final Score: " + score;
+            document.getElementById('final-score').innerText = "SCORE: " + score;
         }
 
-        window.resetGame = () => {
-            trafficCars.forEach(t => scene.remove(t));
-            trafficCars = [];
+        function resetGame() {
+            enemies.forEach(e => scene.remove(e));
+            bullets.forEach(b => scene.remove(b));
+            enemies = [];
+            bullets = [];
             score = 0;
-            distanceTraveled = 0;
-            gameSpeed = 1.0;
-            player.position.x = 0;
+            ammo = 30;
+            gameSpeed = 0.15;
+            camera.position.x = 0;
             isGameOver = false;
-            document.getElementById('score-display').innerText = "Score: 0";
-            document.getElementById('speed-display').innerText = "120 km/h";
+            updateHUD();
             document.getElementById('game-over').style.display = 'none';
-            spawnTraffic();
+        }
+
+        function changeQuality(val) {
+            if (val === 'low') {
+                renderer.shadowMap.enabled = false;
+                dirLight.castShadow = false;
+                scene.fog.density = 0.05; // Dense fog to cover object dropoff performance tricks
+            } else {
+                renderer.shadowMap.enabled = true;
+                dirLight.castShadow = true;
+                scene.fog.density = 0.02;
+            }
+            scene.traverse(c => { if(c.material) c.material.needsUpdate = true; });
+        }
+
+        // Setup Event Listeners (PC Input mapping)
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = true;
+            if (e.key === 'd' || e.key === 'ArrowRight') moveRight = true;
+            if (e.key === ' ') fireWeapon();
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = false;
+            if (e.key === 'd' || e.key === 'ArrowRight') moveRight = false;
+        });
+
+        // Touch Hooks (Mobile optimization mapping)
+        const bindTouch = (id, callback) => {
+            const el = document.getElementById(id);
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); callback(true); });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); callback(false); });
         };
+        bindTouch('left-btn', (state) => moveLeft = state);
+        bindTouch('right-btn', (state) => moveRight = state);
+        document.getElementById('fire-btn').addEventListener('touchstart', (e) => { e.preventDefault(); fireWeapon(); });
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            composer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Run the game
-        init();
+        animate();
     </script>
-
-    <div id="ui-layer">
-        <div id="top-bar">
-            <div>
-                <div id="score-display">Score: 0</div>
-                <div id="speed-display">120 km/h</div>
-            </div>
-            <div class="controls-container">
-                <button id="day-night-btn" class="ui-btn" onclick="toggleDayNight()">☀️ Day</button>
-                <button id="tilt-btn" class="ui-btn" onclick="initTilt()">🚗 Enable Tilt</button>
-                <select id="quality" onchange="changeQuality(this.value)">
-                    <option value="high">Graphics: High</option>
-                    <option value="med">Graphics: Medium</option>
-                    <option value="low">Graphics: Low</option>
-                </select>
-            </div>
-        </div>
-    </div>
-
-    <div id="game-over">
-        <h1>CRASHED!</h1>
-        <h2 id="final-score">Score: 0</h2>
-        <button onclick="resetGame()">DRIVE AGAIN</button>
-    </div>
-
 </body>
 </html>
